@@ -1193,6 +1193,7 @@
   transition: transform 0.2s, box-shadow 0.2s;
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .blogCard:hover {
@@ -1200,14 +1201,18 @@
   box-shadow: 0 2px 20px rgba(44, 40, 37, 0.07);
 }
 
-.blogImagePlaceholder {
+.blogImageWrap {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, #D4E5E0 0%, #EBF3F1 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  overflow: hidden;
+}
+
+.blogImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .blogComingSoon {
@@ -1251,6 +1256,7 @@
   color: #2C2825;
   line-height: 1.3;
   margin-bottom: 8px;
+  flex: 1;
 }
 
 .blogExcerpt {

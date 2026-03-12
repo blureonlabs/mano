@@ -7,27 +7,21 @@ const articles = [
     tag: "Business",
     excerpt:
       "A practical guide to pricing your services based on experience, location, and client demographics.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" className="text-sage/50"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    ),
+    image: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&h=340&fit=crop&q=80",
   },
   {
     title: "DPDP Act 2023: What therapists need to know",
     tag: "Privacy",
     excerpt:
       "Understanding your obligations under India\u2019s new data protection law when handling client records.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" className="text-sage/50"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-    ),
+    image: "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=600&h=340&fit=crop&q=80",
   },
   {
     title: "Setting boundaries with async client messaging",
     tag: "Practice",
     excerpt:
       "How to use secure messaging without burning out or blurring work-life boundaries.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" className="text-sage/50"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    ),
+    image: "https://images.unsplash.com/photo-1573497620053-ea5300f94f21?w=600&h=340&fit=crop&q=80",
   },
 ];
 
@@ -51,10 +45,15 @@ export default function BlogTeaser() {
 
         <div className={styles.blogGrid}>
           {articles.map((a, i) => (
-            <FadeUp key={a.title} delay={i * 0.08}>
+            <FadeUp key={a.title} delay={i * 0.08} className="h-full">
               <div className={styles.blogCard}>
-                <div className={styles.blogImagePlaceholder}>
-                  {a.icon}
+                <div className={styles.blogImageWrap}>
+                  <img
+                    src={a.image}
+                    alt={a.title}
+                    className={styles.blogImage}
+                    loading="lazy"
+                  />
                   <span className={styles.blogComingSoon}>Coming soon</span>
                 </div>
                 <div className={styles.blogContent}>
