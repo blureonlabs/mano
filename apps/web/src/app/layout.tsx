@@ -3,7 +3,7 @@ import { Providers } from "./providers";
 import "@/styles/globals.css";
 
 const LOGO_URL =
-  "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp";
+  "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp?v=2";
 
 export const metadata: Metadata = {
   title: "Mano — Practice Management for Therapists",

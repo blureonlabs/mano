@@ -6,7 +6,7 @@ import Link from "next/link";
 import styles from "@/app/(marketing)/marketing.module.css";
 
 const LOGO_URL =
-  "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp";
+  "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp?v=2";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -40,7 +40,7 @@ export default function Navbar() {
             alt="Mano logo"
             width={32}
             height={32}
-            className="rounded-[9px]"
+            className="rounded-full"
           />
           <span className="font-heading text-base font-medium text-ink tracking-tight">
             Mano
