@@ -1,4 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
+
+const LOGO_URL =
+  "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp";
 
 const navItems = [
   { href: "/dashboard", label: "Today" },
@@ -19,7 +23,8 @@ export default function DashboardLayout({
     <div className="min-h-screen flex">
       {/* Sidebar */}
       <aside className="w-64 bg-card border-r border-cream-300 p-6 space-y-8 hidden md:block">
-        <div>
+        <div className="flex items-center gap-2.5">
+          <Image src={LOGO_URL} alt="Mano" width={28} height={28} className="rounded-lg" />
           <h2 className="text-xl font-heading font-bold text-sage">Mano</h2>
         </div>
         <nav className="space-y-1">

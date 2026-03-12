@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import styles from "@/app/(marketing)/marketing.module.css";
+
+const LOGO_URL =
+  "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -31,7 +35,13 @@ export default function Navbar() {
     <>
       <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
         <Link href="/" className="flex items-center gap-[9px] no-underline">
-          <div className={styles.navLogoMark}>M</div>
+          <Image
+            src={LOGO_URL}
+            alt="Mano logo"
+            width={32}
+            height={32}
+            className="rounded-[9px]"
+          />
           <span className="font-heading text-base font-medium text-ink tracking-tight">
             Mano
           </span>
