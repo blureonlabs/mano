@@ -1,17 +1,29 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Users,
+  FileText,
+  CreditCard,
+  MessageCircle,
+  Settings,
+} from "lucide-react";
 
 const LOGO_URL =
   "https://bjodimpnpwuuoogwufso.supabase.co/storage/v1/object/public/assets/logo.webp?v=2";
 
 const navItems = [
-  { href: "/dashboard", label: "Today" },
-  { href: "/dashboard/schedule", label: "Schedule" },
-  { href: "/dashboard/clients", label: "Clients" },
-  { href: "/dashboard/notes", label: "Notes" },
-  { href: "/dashboard/payments", label: "Payments" },
-  { href: "/dashboard/messages", label: "Messages" },
-  { href: "/settings", label: "Settings" },
+  { href: "/dashboard", label: "Today", icon: LayoutDashboard },
+  { href: "/dashboard/schedule", label: "Schedule", icon: CalendarDays },
+  { href: "/dashboard/clients", label: "Clients", icon: Users },
+  { href: "/dashboard/notes", label: "Notes", icon: FileText },
+  { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
+  { href: "/dashboard/messages", label: "Messages", icon: MessageCircle },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function DashboardLayout({
@@ -19,6 +31,8 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
@@ -28,15 +42,28 @@ export default function DashboardLayout({
           <h2 className="text-xl font-heading font-bold text-sage">Mano</h2>
         </div>
         <nav className="space-y-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-4 py-2.5 rounded-small text-ink hover:bg-cream transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-small transition-colors ${
+                  isActive
+                    ? "bg-sage-50 text-sage font-medium"
+                    : "text-ink-lighter hover:bg-cream hover:text-ink"
+                }`}
+              >
+                <Icon size={18} strokeWidth={isActive ? 2.2 : 1.8} />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 

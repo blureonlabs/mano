@@ -2,6 +2,15 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import {
+  Users,
+  Search,
+  UserPlus,
+  X,
+  Mail,
+  Phone,
+  Trash2,
+} from "lucide-react";
 
 export default function ClientsPage() {
   const clients = trpc.clients.list.useQuery();
@@ -59,16 +68,29 @@ export default function ClientsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-heading font-bold text-ink">Clients</h1>
+          <div className="flex items-center gap-2">
+            <Users size={22} className="text-sage" />
+            <h1 className="text-2xl font-heading font-bold text-ink">Clients</h1>
+          </div>
           <p className="text-sm text-ink-lighter mt-0.5">
             {clients.data?.length ?? 0} active client{(clients.data?.length ?? 0) !== 1 ? "s" : ""}
           </p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-sage text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-sage-500 transition-all shadow-md shadow-sage/20"
+          className="bg-sage text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-sage-500 transition-all shadow-md shadow-sage/20 flex items-center gap-1.5"
         >
-          {showForm ? "Cancel" : "+ Add Client"}
+          {showForm ? (
+            <>
+              <X size={14} />
+              Cancel
+            </>
+          ) : (
+            <>
+              <UserPlus size={14} />
+              Add Client
+            </>
+          )}
         </button>
       </div>
 
@@ -78,7 +100,10 @@ export default function ClientsPage() {
           onSubmit={handleCreate}
           className="bg-white rounded-2xl border border-cream-300 shadow-sm p-5 space-y-4"
         >
-          <h3 className="text-sm font-semibold text-ink">New Client</h3>
+          <h3 className="text-sm font-semibold text-ink flex items-center gap-1.5">
+            <UserPlus size={14} className="text-sage" />
+            New Client
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <input
               type="text"
@@ -121,10 +146,7 @@ export default function ClientsPage() {
       {/* Search */}
       {(clients.data?.length ?? 0) > 0 && (
         <div className="relative">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-lighter">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-lighter" />
           <input
             type="text"
             placeholder="Search clients..."
@@ -139,12 +161,7 @@ export default function ClientsPage() {
       {filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-cream-300 shadow-sm p-10 text-center">
           <div className="w-12 h-12 rounded-full bg-cream-200 mx-auto mb-3 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink-lighter">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
+            <Users size={20} className="text-ink-lighter" />
           </div>
           <p className="text-sm text-ink-lighter">
             {search ? "No clients match your search" : "No clients yet"}
@@ -170,8 +187,20 @@ export default function ClientsPage() {
                   <div className="text-sm font-medium text-ink">
                     {client.full_name}
                   </div>
-                  <div className="text-xs text-ink-lighter">
-                    {[client.email, client.phone].filter(Boolean).join(" · ") || "No contact info"}
+                  <div className="text-xs text-ink-lighter flex items-center gap-2">
+                    {client.email && (
+                      <span className="inline-flex items-center gap-1">
+                        <Mail size={10} />
+                        {client.email}
+                      </span>
+                    )}
+                    {client.phone && (
+                      <span className="inline-flex items-center gap-1">
+                        <Phone size={10} />
+                        {client.phone}
+                      </span>
+                    )}
+                    {!client.email && !client.phone && "No contact info"}
                   </div>
                 </div>
               </div>
@@ -181,8 +210,9 @@ export default function ClientsPage() {
                     deactivate.mutate({ id: client.id });
                   }
                 }}
-                className="text-xs text-ink-lighter hover:text-red-600 transition-colors"
+                className="text-xs text-ink-lighter hover:text-red-600 transition-colors flex items-center gap-1"
               >
+                <Trash2 size={12} />
                 Remove
               </button>
             </div>
