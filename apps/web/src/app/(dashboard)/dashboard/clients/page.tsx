@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import {
   Users,
@@ -177,13 +178,16 @@ export default function ClientsPage() {
               key={client.id}
               className="px-6 py-4 flex items-center justify-between hover:bg-cream-50 transition-colors"
             >
-              <div className="flex items-center gap-4">
+              <Link
+                href={`/dashboard/clients/${client.id}`}
+                className="flex items-center gap-4 flex-1 min-w-0"
+              >
                 <div className="w-10 h-10 rounded-full bg-sage-50 flex items-center justify-center flex-shrink-0">
                   <span className="text-sm font-semibold text-sage">
                     {client.full_name.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-sm font-medium text-ink">
                     {client.full_name}
                   </div>
@@ -203,14 +207,14 @@ export default function ClientsPage() {
                     {!client.email && !client.phone && "No contact info"}
                   </div>
                 </div>
-              </div>
+              </Link>
               <button
                 onClick={() => {
                   if (confirm(`Remove ${client.full_name} from your client list?`)) {
                     deactivate.mutate({ id: client.id });
                   }
                 }}
-                className="text-xs text-ink-lighter hover:text-red-600 transition-colors flex items-center gap-1"
+                className="text-xs text-ink-lighter hover:text-red-600 transition-colors flex items-center gap-1 ml-3 flex-shrink-0"
               >
                 <Trash2 size={12} />
                 Remove

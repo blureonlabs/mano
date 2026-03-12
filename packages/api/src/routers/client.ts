@@ -69,6 +69,40 @@ export const clientRouter = router({
       return data;
     }),
 
+  /** Get detailed client profile with stats */
+  getDetail: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const { data: client, error } = await ctx.supabase
+        .from("clients")
+        .select("*")
+        .eq("id", input.id)
+        .eq("therapist_id", ctx.user.id)
+        .single();
+
+      if (error) throw error;
+
+      const { count: sessionCount } = await ctx.supabase
+        .from("sessions")
+        .select("*", { count: "exact", head: true })
+        .eq("client_id", input.id)
+        .eq("therapist_id", ctx.user.id);
+
+      const { data: lastSession } = await ctx.supabase
+        .from("sessions")
+        .select("starts_at, status")
+        .eq("client_id", input.id)
+        .eq("therapist_id", ctx.user.id)
+        .order("starts_at", { ascending: false })
+        .limit(1);
+
+      return {
+        ...client,
+        session_count: sessionCount ?? 0,
+        last_session: lastSession?.[0] ?? null,
+      };
+    }),
+
   /** Deactivate a client (soft delete) */
   deactivate: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
