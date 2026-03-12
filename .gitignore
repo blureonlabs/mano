@@ -26,3 +26,4 @@ supabase/.branches/
 
 # misc
 *.tsbuildinfo
+.vercel
