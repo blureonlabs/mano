@@ -7,6 +7,7 @@ import { paymentRouter } from "./routers/payment";
 import { messageRouter } from "./routers/message";
 import { integrationRouter } from "./routers/integration";
 import { treatmentPlanRouter } from "./routers/treatment-plan";
+import { resourceRouter } from "./routers/resource";
 
 export const appRouter = router({
   therapist: therapistRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   message: messageRouter,
   integration: integrationRouter,
   treatmentPlan: treatmentPlanRouter,
+  resource: resourceRouter,
 });
 
 export type AppRouter = typeof appRouter;

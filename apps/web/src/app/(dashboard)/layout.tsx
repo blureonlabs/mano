@@ -10,6 +10,7 @@ import {
   FileText,
   CreditCard,
   MessageCircle,
+  FolderOpen,
   Settings,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/dashboard/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/dashboard/clients", label: "Clients", icon: Users },
   { href: "/dashboard/notes", label: "Notes", icon: FileText },
+  { href: "/dashboard/resources", label: "Resources", icon: FolderOpen },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
   { href: "/dashboard/messages", label: "Messages", icon: MessageCircle },
   { href: "/settings", label: "Settings", icon: Settings },
