@@ -75,6 +75,33 @@ export const sessionRouter = router({
   approve: protectedProcedure
     .input(z.object({ session_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      // First fetch the session to get its time range
+      const { data: session } = await ctx.supabase
+        .from("sessions")
+        .select("starts_at, ends_at")
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id)
+        .eq("status", "pending_approval")
+        .single();
+
+      if (!session) throw new Error("Session not found or already processed.");
+
+      // Check for overlapping scheduled sessions (exclude this one)
+      const { data: overlapping } = await ctx.supabase
+        .from("sessions")
+        .select("id")
+        .eq("therapist_id", ctx.user.id)
+        .neq("id", input.session_id)
+        .neq("status", "cancelled")
+        .neq("status", "pending_approval")
+        .lt("starts_at", session.ends_at)
+        .gt("ends_at", session.starts_at)
+        .limit(1);
+
+      if (overlapping && overlapping.length > 0) {
+        throw new Error("Cannot approve — this time slot now conflicts with another session.");
+      }
+
       const { data, error } = await ctx.supabase
         .from("sessions")
         .update({
@@ -186,6 +213,33 @@ export const sessionRouter = router({
       notes: z.string().max(500).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Check for overlapping sessions (not cancelled)
+      const { data: overlapping } = await ctx.supabase
+        .from("sessions")
+        .select("id, starts_at, ends_at")
+        .eq("therapist_id", ctx.user.id)
+        .neq("status", "cancelled")
+        .lt("starts_at", input.ends_at)
+        .gt("ends_at", input.starts_at)
+        .limit(1);
+
+      if (overlapping && overlapping.length > 0) {
+        throw new Error("This time slot overlaps with an existing session.");
+      }
+
+      // Check for overlapping blocked slots
+      const { data: overlappingBlocks } = await ctx.supabase
+        .from("blocked_slots")
+        .select("id")
+        .eq("therapist_id", ctx.user.id)
+        .lt("start_at", input.ends_at)
+        .gt("end_at", input.starts_at)
+        .limit(1);
+
+      if (overlappingBlocks && overlappingBlocks.length > 0) {
+        throw new Error("This time slot overlaps with a blocked break.");
+      }
+
       // Resolve session type for duration/rate
       const { data: therapist } = await ctx.supabase
         .from("therapists")

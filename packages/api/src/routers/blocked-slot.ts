@@ -26,6 +26,20 @@ export const blockedSlotRouter = router({
   create: protectedProcedure
     .input(createBlockedSlotSchema)
     .mutation(async ({ ctx, input }) => {
+      // Check for overlapping sessions (not cancelled)
+      const { data: overlapping } = await ctx.supabase
+        .from("sessions")
+        .select("id")
+        .eq("therapist_id", ctx.user.id)
+        .neq("status", "cancelled")
+        .lt("starts_at", input.end_at)
+        .gt("ends_at", input.start_at)
+        .limit(1);
+
+      if (overlapping && overlapping.length > 0) {
+        throw new Error("This break overlaps with an existing session.");
+      }
+
       const { data, error } = await ctx.supabase
         .from("blocked_slots")
         .insert({
