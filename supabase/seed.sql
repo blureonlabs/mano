@@ -1,0 +1,2 @@
+-- Mano seed data for local development
+-- TODO: Add test therapist, sample clients, demo sessions

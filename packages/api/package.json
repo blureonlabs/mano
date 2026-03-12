@@ -1,0 +1,28 @@
+{
+  "name": "@mano/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "@trpc/server": "^11.0.0",
+    "@mano/shared": "workspace:*",
+    "@mano/domain": "workspace:*",
+    "@mano/db": "workspace:*",
+    "@mano/integrations": "workspace:*",
+    "superjson": "^2.2.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,6 @@
+export * from "./therapist.schema";
+export * from "./client.schema";
+export * from "./session.schema";
+export * from "./booking.schema";
+export * from "./payment.schema";
+export * from "./message.schema";
