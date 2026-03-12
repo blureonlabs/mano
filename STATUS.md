@@ -1,6 +1,6 @@
 # Mano — Project Status
 
-> Last updated: 12 March 2026
+> Last updated: 12 March 2026 (evening)
 
 ## Overview
 
@@ -47,7 +47,7 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Supabase Storage (public assets bucket, logo uploaded)
 - [x] Environment variables set on Vercel (all 3 environments, including ENCRYPTION_KEY)
 
-### Database (7 migrations, all pushed to remote)
+### Database (8 migrations, all pushed to remote)
 - [x] Full schema — 12 tables: therapists, availability, blocked_slots, clients, sessions, session_notes, messages, invoices, treatment_plans, resources, client_resources
 - [x] 8 custom enums: session_status, payment_status, note_type, sender_type, invoice_status, treatment_plan_status, therapy_modality, resource_type
 - [x] RLS policies on all tables (therapist-scoped access)
@@ -56,6 +56,7 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] `handle_new_user()` trigger — auto-creates therapist profile on signup
 - [x] Booking policies columns on therapists (cancellation, late, rescheduling)
 - [x] Column type migration for encrypted fields (text[] → text, jsonb → text)
+- [x] Migration 00008: session_type_name column on sessions, JSONB session_types on therapists
 
 ### Security & Encryption
 - [x] **AES-256-GCM column encryption** — clinical data encrypted before DB insert, decrypted after select
@@ -95,12 +96,13 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Typography: Lora (headings), DM Sans (body)
 - [x] Border radius tokens: card 16px, small 10px, pill 100px
 
-### API Layer (@mano/api) — 9 routers
+### API Layer (@mano/api) — 10 routers
 - [x] tRPC setup with Supabase context + auth middleware
-- [x] **therapist** — profile CRUD, getBySlug (public)
+- [x] **therapist** — profile CRUD, getBySlug (public), updateSessionTypes
 - [x] **client** — list, create, update, delete, getDetail (with session count/last session)
-- [x] **session** — byClient, today, thisWeek, createNote, updateNote, getNote, getNoteById, listNotes, deleteNote (notes encrypted at rest)
-- [x] **booking** — availableSlots (public), createBooking (public), approve/reject
+- [x] **session** — byClient, today, upcoming, listByDateRange, create (manual), approve, reject, complete, cancel, markNoShow, reschedule, delete, createNote, updateNote, getNote, getNoteById, listNotes, deleteNote (notes encrypted at rest)
+- [x] **booking** — availableSlots (public), createBooking (public)
+- [x] **blockedSlot** — list (date range), create, update, delete (with overlap detection)
 - [x] **payment** — list, create
 - [x] **message** — list, send (content encrypted at rest)
 - [x] **integration** — status, connect/disconnect
@@ -114,12 +116,13 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Therapist, client, message services
 
 ### Shared (@mano/shared)
-- [x] Zod schemas: therapist, client, session, booking, payment, message, treatment-plan, resource
-- [x] Constants: pricing tiers, session types, note templates (SOAP/DAP/BIRP/Freeform), therapy modalities (11), common techniques (15), risk flags (6)
-- [x] Exported types: Goal, SubGoal, TherapyModality, TherapyModalityKey, ResourceType, etc.
+- [x] Zod schemas: therapist, client, session, booking, payment, message, treatment-plan, resource, blocked-slot
+- [x] Constants: pricing tiers, session types, note templates (SOAP/DAP/BIRP/Freeform), therapy modalities (11), common techniques (15), risk flags (6), session durations
+- [x] Exported types: Goal, SubGoal, TherapyModality, TherapyModalityKey, ResourceType, SessionType, BlockedSlot, etc.
 
 ### Booking Page (`/booking/[slug]`)
-- [x] Full booking flow: therapist header → date picker → time slot → client form → confirmation
+- [x] Full booking flow: session type picker → date picker → time slot → client form → confirmation (4-step)
+- [x] Configurable session types (e.g., Intro Call 30 min free, Regular 50 min ₹2,000)
 - [x] Policy notice (collapsible card showing cancellation/late/rescheduling policies)
 - [x] Sessions created with `pending_approval` status
 - [x] Polished UI with multi-step flow
@@ -134,10 +137,20 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Today's sessions list with time, client name, status badges, notes link
 - [x] Empty states
 
-### Dashboard — Schedule (`/dashboard/schedule`)
-- [x] Week-scoped session list with date/time, client name, status/payment badges
-- [x] Approve/reject buttons for pending_approval sessions
-- [x] Notes link per session
+### Dashboard — Schedule (`/dashboard/schedule`) — Full Calendar Control Center
+- [x] **Three view modes**: Week view (7-column grid), Day view (single-column), List view (date-grouped)
+- [x] **Week view**: 8AM–9PM IST time grid, session blocks color-coded by status, blocked slot hatched blocks, today column highlight
+- [x] **Day view**: Single-day expanded timeline with all sessions/breaks
+- [x] **List view**: Date-grouped session list with all action buttons
+- [x] **Header**: View toggle (Calendar/List), week navigation arrows, Today button, "+ Add Session" button, pending count badge
+- [x] **Session detail popover**: Client info, time, status/payment badges, Zoom link, Notes link
+- [x] **Session actions**: Approve, Reject, Complete, Cancel, No Show, Reschedule (inline date/time editor), Delete (with confirmation)
+- [x] **Break management**: Click empty cell to add break, click existing break to edit (timing/reason) or delete
+- [x] **Create session modal**: Client picker, session type dropdown (auto-calculates end time), date/time inputs
+- [x] **Overlap detection**: Session creation, approval, and break creation all check for conflicts
+- [x] **Toast notifications**: Sonner (bottom-right) for success/error feedback on all mutations
+- [x] **Loading overlay**: Global spinner during any action (approve, cancel, reschedule, delete, etc.)
+- [x] **Pending banner**: Amber banner showing count of pending approval requests
 
 ### Dashboard — Clients (`/dashboard/clients`)
 - [x] Client list with avatar initials, contact info, search/filter
@@ -177,10 +190,20 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Unique constraint prevents duplicate sharing
 
 ### Settings (`/settings`)
-- [x] Profile form (name, email, phone, bio, slug, session types, default duration, fee)
+- [x] Profile form (name, display name, phone, bio, qualifications, slug, GSTIN)
+- [x] **Session types editor**: Add/remove session types (name, duration, rate, description, active toggle), up to 10 types
+- [x] Buffer time between sessions (0/5/10/15/30 min)
 - [x] Availability editor (day/time per weekday, add/remove slots)
 - [x] Booking page toggle + live link
 - [x] Policies form (cancellation, late arrival, rescheduling — 3 textareas)
+- [x] Toast notifications on save (Sonner)
+
+### Performance & UX
+- [x] Middleware optimized — single `getUser()` call reused for session refresh + auth guard
+- [x] React Query stale time increased to 5 minutes (was 30s) to reduce unnecessary refetches
+- [x] Global toast notification system (Sonner) — bottom-right, rich colors, DM Sans font
+- [x] TRPCError used throughout (not plain Error) so messages reach the frontend
+- [x] IST timezone utilities — all date/time display and calculation uses `Asia/Kolkata`
 
 ### Documentation
 - [x] `docs/MANO_SAAS_ANALYSIS.md` — Full SaaS analysis
@@ -208,19 +231,26 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 
 ## What's NOT STARTED
 
+### Tier 1 — Complete the MVP (wire existing code)
+- [ ] **Payments page** — Connect payment.list query, build invoice table, Razorpay order creation
+- [ ] **Messages page** — Build chat UI with client list sidebar, connect message.list/send
+- [ ] **Wire Zoom integration** — Call createMeeting() on booking, deleteMeeting() on cancellation
+- [ ] **Wire notifications** — Email/WhatsApp on: booking confirmation, approval, reminders
+
+### Tier 2 — High-value features
+- [ ] Client portal (client login to book/view own sessions)
 - [ ] Legal pages (/privacy, /terms) — needed for DPDP Act compliance
 - [ ] Consent banner + consent at signup
+- [ ] PDF invoice generation/download
+- [ ] Automated reminders (24h, 1h before session via WhatsApp/email)
+- [ ] Google Calendar bi-directional sync
+
+### Tier 3 — Polish & growth
 - [ ] Audit logging (who accessed what, when)
 - [ ] Data deletion/export for clients (DPDP right to erasure)
 - [ ] Real-time messaging (Supabase Realtime)
-- [ ] Automated reminders (24h, 1h before session via WhatsApp/email)
-- [ ] Zoom meeting auto-creation on booking
-- [ ] Google Calendar bi-directional sync
-- [ ] PDF invoice generation/download
-- [ ] Client portal (client login to book/view sessions)
 - [ ] Analytics/dashboard metrics
 - [ ] Data export (CSV/JSON)
-- [ ] Email notifications (booking confirmation, reminders, receipts)
 - [ ] File upload for resources (Supabase Storage integration)
 - [ ] Error tracking/monitoring
 - [ ] Unit/integration/E2E tests
@@ -230,6 +260,16 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 
 | # | Hash | Message |
 |---|------|---------|
+| 35 | ead7270 | Add missing blocked-slot overlap check to break creation |
+| 34 | ae7952b | Add edit/delete for sessions and breaks with loading overlay |
+| 33 | c1927e9 | Update lockfile for sonner dependency |
+| 32 | cdefa5d | Add global toast notifications with Sonner |
+| 31 | a96adc7 | Use TRPCError for overlap errors so messages reach the client |
+| 30 | 740c1eb | Add overlap detection for session creation, approval, and breaks |
+| 29 | 22b5ed1 | Add calendar control center with week/day views and session management |
+| 28 | ac92a2e | Fix double auth check in middleware and increase query stale time |
+| 27 | f04afbd | Add configurable session types (intro call + regular sessions) |
+| 26 | 5882ae9 | Update STATUS.md with latest commits and deployment state |
 | 25 | 2eec6b7 | Fix decryption crash on legacy plaintext data |
 | 24 | 78a7738 | Update STATUS.md with encryption, new landing sections, and docs |
 | 23 | a7b6915 | Add AES-256-GCM column encryption for clinical data at rest |
@@ -266,7 +306,8 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 | 4 | 00004_add_booking_policies.sql | Cancellation/late/rescheduling policy columns |
 | 5 | 00005_add_treatment_plans.sql | treatment_plans table + modality/status enums |
 | 6 | 00006_add_resources.sql | resources + client_resources tables, GIN index |
-| 7 | 00007_encryption_column_types.sql | Change text[]/jsonb columns to text for encrypted data (pushed) |
+| 7 | 00007_encryption_column_types.sql | Change text[]/jsonb columns to text for encrypted data |
+| 8 | 00008_session_types.sql | Add session_type_name to sessions, JSONB session_types to therapists |
 
 ## Pages Summary (17 routes)
 

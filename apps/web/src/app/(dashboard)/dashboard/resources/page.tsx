@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { THERAPY_MODALITIES, type TherapyModalityKey } from "@mano/shared";
+import { useCustomTags } from "@/lib/use-custom-tags";
 import AddResourceModal from "@/components/resources/AddResourceModal";
 import {
   FolderOpen,
@@ -28,6 +28,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function ResourcesPage() {
+  const { modalities } = useCustomTags();
   const [showAdd, setShowAdd] = useState(false);
   const [filterModality, setFilterModality] = useState<string>("");
 
@@ -76,21 +77,19 @@ export default function ResourcesPage() {
         >
           All
         </button>
-        {(Object.entries(THERAPY_MODALITIES) as [TherapyModalityKey, { name: string }][]).map(
-          ([key, val]) => (
-            <button
-              key={key}
-              onClick={() => setFilterModality(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filterModality === key
-                  ? "bg-sage text-white"
-                  : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
-              }`}
-            >
-              {val.name}
-            </button>
-          )
-        )}
+        {modalities.map((m) => (
+          <button
+            key={m.key}
+            onClick={() => setFilterModality(m.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              filterModality === m.key
+                ? "bg-sage text-white"
+                : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
+            }`}
+          >
+            {m.name}
+          </button>
+        ))}
       </div>
 
       {/* Resource grid */}
@@ -115,8 +114,8 @@ export default function ResourcesPage() {
           {resources.data?.map((r) => {
             const Icon = TYPE_ICONS[r.resource_type] ?? FileText;
             const typeColor = TYPE_COLORS[r.resource_type] ?? TYPE_COLORS.file;
-            const modalities = (r.modality_tags ?? [])
-              .map((t: string) => THERAPY_MODALITIES[t as TherapyModalityKey]?.name)
+            const mods = (r.modality_tags ?? [])
+              .map((t: string) => modalities.find((m) => m.key === t)?.name ?? t)
               .filter(Boolean);
             const categories = r.category_tags ?? [];
 
@@ -155,9 +154,9 @@ export default function ResourcesPage() {
                   </a>
                 )}
 
-                {(modalities.length > 0 || categories.length > 0) && (
+                {(mods.length > 0 || categories.length > 0) && (
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {modalities.map((m: string) => (
+                    {mods.map((m: string) => (
                       <span key={m} className="text-[10px] px-1.5 py-0.5 bg-cream-100 text-ink-lighter rounded">
                         {m}
                       </span>

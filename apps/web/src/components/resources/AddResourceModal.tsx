@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { THERAPY_MODALITIES, type TherapyModalityKey } from "@mano/shared";
+import { useCustomTags } from "@/lib/use-custom-tags";
 import { X, Upload, Link as LinkIcon, FileText } from "lucide-react";
 
 interface AddResourceModalProps {
@@ -17,19 +17,8 @@ const RESOURCE_TYPES = [
   { key: "worksheet" as const, label: "Worksheet", icon: FileText },
 ];
 
-const CATEGORY_SUGGESTIONS = [
-  "Homework",
-  "Psychoeducation",
-  "Self-assessment",
-  "Coping skills",
-  "Journaling",
-  "Relaxation",
-  "Thought records",
-  "Behavioral activation",
-  "Mindfulness",
-];
-
 export default function AddResourceModal({ open, onClose, onCreated }: AddResourceModalProps) {
+  const { modalities, categories } = useCustomTags();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [resourceType, setResourceType] = useState<"file" | "link" | "worksheet">("worksheet");
@@ -150,22 +139,20 @@ export default function AddResourceModal({ open, onClose, onCreated }: AddResour
           <div>
             <label className="block text-xs font-medium text-ink-light mb-2">Modality tags</label>
             <div className="flex flex-wrap gap-1.5">
-              {(Object.entries(THERAPY_MODALITIES) as [TherapyModalityKey, { name: string }][]).map(
-                ([key, val]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => toggleTag(key, modalityTags, setModalityTags)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
-                      modalityTags.includes(key)
-                        ? "bg-sage text-white"
-                        : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
-                    }`}
-                  >
-                    {val.name}
-                  </button>
-                )
-              )}
+              {modalities.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => toggleTag(m.key, modalityTags, setModalityTags)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                    modalityTags.includes(m.key)
+                      ? "bg-sage text-white"
+                      : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
+                  }`}
+                >
+                  {m.name}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -173,7 +160,7 @@ export default function AddResourceModal({ open, onClose, onCreated }: AddResour
           <div>
             <label className="block text-xs font-medium text-ink-light mb-2">Category tags</label>
             <div className="flex flex-wrap gap-1.5">
-              {CATEGORY_SUGGESTIONS.map((cat) => (
+              {categories.map((cat) => (
                 <button
                   key={cat}
                   type="button"

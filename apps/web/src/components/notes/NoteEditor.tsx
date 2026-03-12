@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { NOTE_TEMPLATES, COMMON_TECHNIQUES, RISK_FLAGS, type NoteTemplate } from "@mano/shared";
+import { NOTE_TEMPLATES, type NoteTemplate } from "@mano/shared";
+import { useCustomTags } from "@/lib/use-custom-tags";
 import NoteTypeSelector from "./NoteTypeSelector";
 import { Save, AlertTriangle, Wrench, BookOpen } from "lucide-react";
 
@@ -28,6 +29,7 @@ interface NoteEditorProps {
 }
 
 export default function NoteEditor({ sessionId, existingNote, sessionInfo, onSaved }: NoteEditorProps) {
+  const { techniques: availableTechniques, riskFlags: availableRiskFlags } = useCustomTags();
   const [noteType, setNoteType] = useState<NoteTemplate>(
     (existingNote?.note_type as NoteTemplate) ?? "soap"
   );
@@ -177,7 +179,7 @@ export default function NoteEditor({ sessionId, existingNote, sessionInfo, onSav
           Techniques used
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {COMMON_TECHNIQUES.map((t) => (
+          {availableTechniques.map((t) => (
             <button
               key={t}
               type="button"
@@ -201,7 +203,7 @@ export default function NoteEditor({ sessionId, existingNote, sessionInfo, onSav
           Risk flags
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {RISK_FLAGS.map((f) => (
+          {availableRiskFlags.map((f) => (
             <button
               key={f}
               type="button"

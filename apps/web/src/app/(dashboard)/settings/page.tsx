@@ -7,6 +7,7 @@ import AvailabilityEditor from "@/components/settings/AvailabilityEditor";
 import IntegrationCards from "@/components/settings/IntegrationCards";
 import BookingPageSection from "@/components/settings/BookingPageSection";
 import PoliciesForm from "@/components/settings/PoliciesForm";
+import TagManager from "@/components/settings/TagManager";
 
 export default function SettingsPage() {
   const therapist = trpc.therapist.me.useQuery();
@@ -75,6 +76,8 @@ export default function SettingsPage() {
         slug={t.slug}
         bookingPageActive={t.booking_page_active}
       />
+
+      <TagManager customTags={t.custom_tags} />
 
       <PoliciesForm
         therapist={{

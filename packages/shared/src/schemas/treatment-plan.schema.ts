@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-export const therapyModalityEnum = z.enum([
-  "cbt", "rebt", "dbt", "psychodynamic", "humanistic",
-  "gestalt", "act", "emdr", "solution_focused", "integrative", "other",
-]);
+export const therapyModalityEnum = z.string().min(1);
 
 export const treatmentPlanStatusEnum = z.enum(["draft", "active", "completed", "archived"]);
 

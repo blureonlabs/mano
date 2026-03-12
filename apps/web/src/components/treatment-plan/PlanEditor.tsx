@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { THERAPY_MODALITIES, type TherapyModalityKey } from "@mano/shared";
 import type { Goal } from "@mano/shared";
+import { useCustomTags } from "@/lib/use-custom-tags";
 import GoalList from "./GoalList";
 import { Save, Brain } from "lucide-react";
 
@@ -27,10 +27,11 @@ interface PlanEditorProps {
 
 export default function PlanEditor({ clientId, existingPlan }: PlanEditorProps) {
   const router = useRouter();
+  const { modalities } = useCustomTags();
 
   const [title, setTitle] = useState(existingPlan?.title ?? "Treatment Plan");
-  const [modality, setModality] = useState<TherapyModalityKey>(
-    (existingPlan?.modality as TherapyModalityKey) ?? "cbt"
+  const [modality, setModality] = useState(
+    existingPlan?.modality ?? "cbt"
   );
   const [modalityOther, setModalityOther] = useState(existingPlan?.modality_other ?? "");
   const [concerns, setConcerns] = useState(existingPlan?.presenting_concerns ?? "");
@@ -103,23 +104,21 @@ export default function PlanEditor({ clientId, existingPlan }: PlanEditorProps) 
           Therapy modality
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.entries(THERAPY_MODALITIES) as [TherapyModalityKey, { name: string; fullName: string }][]).map(
-            ([key, val]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setModality(key)}
-                title={val.fullName}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  modality === key
-                    ? "bg-sage text-white shadow-sm"
-                    : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
-                }`}
-              >
-                {val.name}
-              </button>
-            )
-          )}
+          {modalities.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setModality(m.key)}
+              title={m.fullName}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                modality === m.key
+                  ? "bg-sage text-white shadow-sm"
+                  : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
         </div>
         {modality === "other" && (
           <input

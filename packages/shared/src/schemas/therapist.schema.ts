@@ -19,6 +19,19 @@ export const updateSessionTypesSchema = z.object({
 
 export type UpdateSessionTypesInput = z.infer<typeof updateSessionTypesSchema>;
 
+export const customTagsSchema = z.object({
+  modalities: z.array(z.object({
+    key: z.string(),
+    name: z.string(),
+    fullName: z.string(),
+  })).optional(),
+  techniques: z.array(z.string()).optional(),
+  categories: z.array(z.string()).optional(),
+  risk_flags: z.array(z.string()).optional(),
+}).nullable();
+
+export type CustomTags = z.infer<typeof customTagsSchema>;
+
 export const therapistSchema = z.object({
   id: z.string().uuid(),
   full_name: z.string().min(1).max(200),
@@ -37,6 +50,7 @@ export const therapistSchema = z.object({
   late_policy: z.string().max(1000).nullable(),
   rescheduling_policy: z.string().max(1000).nullable(),
   session_types: z.array(sessionTypeSchema).default([]),
+  custom_tags: customTagsSchema.default(null),
   gstin: z.string().max(15).nullable(),
   google_connected: z.boolean().default(false),
   zoom_connected: z.boolean().default(false),
@@ -60,6 +74,7 @@ export const createTherapistSchema = therapistSchema.pick({
   late_policy: true,
   rescheduling_policy: true,
   session_types: true,
+  custom_tags: true,
   gstin: true,
 });
 
