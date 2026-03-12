@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { trpc } from "@/lib/trpc";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -35,15 +36,19 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
 
+  // Prefetch shared data at layout level — child pages get it from cache instantly
+  trpc.therapist.me.useQuery();
+  trpc.clients.list.useQuery();
+
   return (
     <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-card border-r border-cream-300 p-6 space-y-8 hidden md:block">
+      {/* Sidebar — fixed, full height */}
+      <aside className="w-64 bg-card border-r border-cream-300 p-6 space-y-8 hidden md:flex md:flex-col fixed inset-y-0 left-0 z-30">
         <div className="flex items-center gap-2.5">
           <Image src={LOGO_URL} alt="Mano" width={28} height={28} className="rounded-full" />
           <h2 className="text-xl font-heading font-bold text-sage">Mano</h2>
         </div>
-        <nav className="space-y-1">
+        <nav className="space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -69,8 +74,8 @@ export default function DashboardLayout({
         </nav>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 p-8">{children}</main>
+      {/* Main content — offset by sidebar width, scrollable */}
+      <main className="flex-1 md:ml-64 p-8 min-h-screen overflow-y-auto">{children}</main>
     </div>
   );
 }

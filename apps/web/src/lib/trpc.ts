@@ -22,7 +22,11 @@ export function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 5 * 60 * 1000, // 5 minutes — don't refetch if data is fresh
+        gcTime: 10 * 60 * 1000, // 10 minutes — keep unused cache longer
+        refetchOnWindowFocus: false, // don't refetch when switching tabs
+        refetchOnReconnect: false, // don't refetch on network reconnect
+        retry: 1, // only retry once on failure
       },
     },
   });
