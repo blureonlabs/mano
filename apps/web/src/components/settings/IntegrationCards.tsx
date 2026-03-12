@@ -67,10 +67,14 @@ export default function IntegrationCards({
                 </button>
               </>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-cream-200 text-ink-lighter text-xs font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-ink-lighter" />
-                Not connected
-              </span>
+              <button
+                disabled
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sage/10 text-sage text-xs font-medium cursor-not-allowed opacity-60"
+                title="Coming soon"
+              >
+                Connect
+                <span className="text-[9px] text-ink-lighter font-normal">(Soon)</span>
+              </button>
             )}
           </div>
         </div>
@@ -110,18 +114,18 @@ export default function IntegrationCards({
                 </button>
               </>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-cream-200 text-ink-lighter text-xs font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-ink-lighter" />
-                Not connected
-              </span>
+              <button
+                disabled
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sage/10 text-sage text-xs font-medium cursor-not-allowed opacity-60"
+                title="Coming soon"
+              >
+                Connect
+                <span className="text-[9px] text-ink-lighter font-normal">(Soon)</span>
+              </button>
             )}
           </div>
         </div>
       </div>
-
-      <p className="text-[11px] text-ink-lighter">
-        Integration setup coming soon. Connected status is displayed for reference.
-      </p>
     </section>
   );
 }

@@ -1,5 +1,24 @@
-export const SESSION_DURATIONS = [30, 45, 50, 60, 90] as const;
+export const SESSION_DURATIONS = [15, 20, 30, 45, 50, 60, 90, 120] as const;
 export type SessionDuration = (typeof SESSION_DURATIONS)[number];
+
+export const DEFAULT_SESSION_TYPES = [
+  {
+    name: "Intro Call",
+    duration_mins: 15,
+    rate_inr: 0,
+    description: "A free introductory call to see if we are a good fit.",
+    is_active: true,
+    sort_order: 0,
+  },
+  {
+    name: "Regular Session",
+    duration_mins: 50,
+    rate_inr: 0,
+    description: null,
+    is_active: true,
+    sort_order: 1,
+  },
+] as const;
 
 export const SESSION_STATUSES = {
   scheduled: { label: "Scheduled", color: "sage" },

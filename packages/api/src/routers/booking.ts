@@ -1,6 +1,6 @@
 import { router, publicProcedure } from "../trpc";
 import { bookSessionSchema, getAvailableSlotsSchema } from "@mano/shared";
-import type { TimeSlot } from "@mano/shared";
+import type { TimeSlot, SessionType } from "@mano/shared";
 
 export const bookingRouter = router({
   /** Get available slots for a therapist (PUBLIC — used on booking page) */
@@ -10,21 +10,29 @@ export const bookingRouter = router({
       // 1. Get therapist by slug
       const { data: therapist } = await ctx.supabase
         .from("therapists")
-        .select("id, session_duration_mins, buffer_mins, booking_page_active")
+        .select("id, session_duration_mins, buffer_mins, booking_page_active, session_types")
         .eq("slug", input.therapist_slug)
         .eq("booking_page_active", true)
         .single();
 
       if (!therapist) return [];
 
-      // 2. Get availability rules
+      // 2. Resolve session type duration
+      const sessionTypes = (therapist.session_types ?? []) as SessionType[];
+      const selectedType = sessionTypes.find(
+        (st) => st.id === input.session_type_id && st.is_active
+      );
+      const durationMins = selectedType?.duration_mins ?? therapist.session_duration_mins;
+      const bufferMins = therapist.buffer_mins;
+
+      // 3. Get availability rules
       const { data: availability } = await ctx.supabase
         .from("availability")
         .select("*")
         .eq("therapist_id", therapist.id)
         .eq("is_active", true);
 
-      // 3. Get booked sessions in range
+      // 4. Get booked sessions in range
       const { data: booked } = await ctx.supabase
         .from("sessions")
         .select("starts_at, ends_at")
@@ -33,7 +41,7 @@ export const bookingRouter = router({
         .gte("starts_at", `${input.from_date}T00:00:00+05:30`)
         .lte("starts_at", `${input.to_date}T23:59:59+05:30`);
 
-      // 4. Get blocked slots
+      // 5. Get blocked slots
       const { data: blocked } = await ctx.supabase
         .from("blocked_slots")
         .select("start_at, end_at")
@@ -41,10 +49,9 @@ export const bookingRouter = router({
         .gte("start_at", `${input.from_date}T00:00:00+05:30`)
         .lte("start_at", `${input.to_date}T23:59:59+05:30`);
 
-      // 5. Compute available slots
-      // TODO: Move to @mano/domain SlotCalculator for proper business logic
+      // 6. Compute available slots
       const slots: TimeSlot[] = [];
-      const slotDuration = therapist.session_duration_mins + therapist.buffer_mins;
+      const slotStep = durationMins + bufferMins;
 
       const fromDate = new Date(`${input.from_date}T00:00:00+05:30`);
       const toDate = new Date(`${input.to_date}T23:59:59+05:30`);
@@ -55,14 +62,12 @@ export const bookingRouter = router({
         if (!dayRules) continue;
 
         const dayStr = d.toISOString().split("T")[0];
-        const [startH, startM] = dayRules.start_time.split(":").map(Number);
-        const [endH, endM] = dayRules.end_time.split(":").map(Number);
 
         let cursor = new Date(`${dayStr}T${dayRules.start_time}+05:30`);
         const dayEnd = new Date(`${dayStr}T${dayRules.end_time}+05:30`);
 
-        while (cursor.getTime() + therapist.session_duration_mins * 60000 <= dayEnd.getTime()) {
-          const slotEnd = new Date(cursor.getTime() + therapist.session_duration_mins * 60000);
+        while (cursor.getTime() + durationMins * 60000 <= dayEnd.getTime()) {
+          const slotEnd = new Date(cursor.getTime() + durationMins * 60000);
 
           const isBooked = booked?.some(
             (s) => new Date(s.starts_at) < slotEnd && new Date(s.ends_at) > cursor
@@ -79,7 +84,7 @@ export const bookingRouter = router({
             });
           }
 
-          cursor = new Date(cursor.getTime() + slotDuration * 60000);
+          cursor = new Date(cursor.getTime() + slotStep * 60000);
         }
       }
 
@@ -99,7 +104,17 @@ export const bookingRouter = router({
 
       if (!therapist) throw new Error("Therapist not found");
 
-      // 2. Check slot still available (prevent double-booking)
+      // 2. Resolve session type
+      const sessionTypes = (therapist.session_types ?? []) as SessionType[];
+      const selectedType = sessionTypes.find(
+        (st) => st.id === input.session_type_id && st.is_active
+      );
+      const durationMins = selectedType?.duration_mins ?? therapist.session_duration_mins;
+      const rateInr = selectedType?.rate_inr ?? therapist.session_rate_inr;
+      const typeName = selectedType?.name ?? null;
+      const isFree = rateInr === 0;
+
+      // 3. Check slot still available (prevent double-booking)
       const { data: conflicts } = await ctx.supabase
         .from("sessions")
         .select("id")
@@ -112,7 +127,7 @@ export const bookingRouter = router({
         throw new Error("Slot no longer available");
       }
 
-      // 3. Find or create client
+      // 4. Find or create client
       let { data: client } = await ctx.supabase
         .from("clients")
         .select("*")
@@ -134,13 +149,13 @@ export const bookingRouter = router({
         client = newClient;
       }
 
-      // 4. Get session count for this client
+      // 5. Get session count for this client
       const { count } = await ctx.supabase
         .from("sessions")
         .select("*", { count: "exact", head: true })
         .eq("client_id", client!.id);
 
-      // 5. Create Zoom meeting (if therapist has Zoom connected)
+      // 6. Create Zoom meeting (if therapist has Zoom connected)
       let zoomJoinUrl: string | null = null;
       let zoomStartUrl: string | null = null;
       let zoomMeetingId: string | null = null;
@@ -149,13 +164,13 @@ export const bookingRouter = router({
         // TODO: Call @mano/integrations ZoomClient.createMeeting()
       }
 
-      // 6. Create Google Calendar event (if connected)
+      // 7. Create Google Calendar event (if connected)
       let googleEventId: string | null = null;
       if (therapist.google_connected) {
         // TODO: Call @mano/integrations GoogleCalendarClient.createEvent()
       }
 
-      // 7. Create session (pending approval — therapist must approve)
+      // 8. Create session (pending approval — therapist must approve)
       const { data: session, error } = await ctx.supabase
         .from("sessions")
         .insert({
@@ -163,15 +178,16 @@ export const bookingRouter = router({
           client_id: client!.id,
           starts_at: input.slot_start,
           ends_at: input.slot_end,
-          duration_mins: therapist.session_duration_mins,
+          duration_mins: durationMins,
           status: "pending_approval",
+          session_type_name: typeName,
           zoom_meeting_id: zoomMeetingId,
           zoom_join_url: zoomJoinUrl,
           zoom_start_url: zoomStartUrl,
           google_event_id: googleEventId,
-          payment_status: input.razorpay_payment_id ? "paid" : "pending",
+          payment_status: isFree ? "waived" : (input.razorpay_payment_id ? "paid" : "pending"),
           razorpay_payment_id: input.razorpay_payment_id ?? null,
-          amount_inr: therapist.session_rate_inr,
+          amount_inr: rateInr,
           session_number: (count ?? 0) + 1,
         })
         .select()
@@ -179,7 +195,7 @@ export const bookingRouter = router({
 
       if (error) throw error;
 
-      // 8. Send confirmations
+      // 9. Send confirmations
       // TODO: Call @mano/integrations EmailClient + WhatsAppClient
 
       return {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import TherapistHeader from "./TherapistHeader";
+import SessionTypePicker from "./SessionTypePicker";
 import DatePicker from "./DatePicker";
 import SlotGrid from "./SlotGrid";
 import BookingForm from "./BookingForm";
@@ -14,7 +15,15 @@ interface TimeSlot {
   end: string;
 }
 
-type Step = "select" | "form" | "confirmed";
+interface SelectedType {
+  id: string;
+  name: string;
+  duration_mins: number;
+  rate_inr: number;
+  description: string | null;
+}
+
+type Step = "type" | "select" | "form" | "confirmed";
 
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0] as string;
@@ -23,9 +32,10 @@ function toDateStr(d: Date): string {
 export default function BookingFlow({ slug }: { slug: string }) {
   const today = toDateStr(new Date());
 
+  const [selectedType, setSelectedType] = useState<SelectedType | null>(null);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [step, setStep] = useState<Step>("select");
+  const [step, setStep] = useState<Step>("type");
   const [zoomJoinUrl, setZoomJoinUrl] = useState<string | null>(null);
 
   // Fetch therapist profile
@@ -34,14 +44,15 @@ export default function BookingFlow({ slug }: { slug: string }) {
     { retry: false }
   );
 
-  // Fetch slots for the selected date
+  // Fetch slots for the selected date (only when a type is selected)
   const slots = trpc.booking.getSlots.useQuery(
     {
       therapist_slug: slug,
+      session_type_id: selectedType?.id ?? "",
       from_date: selectedDate,
       to_date: selectedDate,
     },
-    { enabled: !!therapist.data }
+    { enabled: !!therapist.data && !!selectedType }
   );
 
   // Book mutation
@@ -51,6 +62,12 @@ export default function BookingFlow({ slug }: { slug: string }) {
       setStep("confirmed");
     },
   });
+
+  function handleTypeSelect(type: SelectedType) {
+    setSelectedType(type);
+    setSelectedSlot(null);
+    setStep("select");
+  }
 
   function handleDateSelect(date: string) {
     setSelectedDate(date);
@@ -64,9 +81,10 @@ export default function BookingFlow({ slug }: { slug: string }) {
   }
 
   function handleBook(data: { name: string; email: string; phone: string }) {
-    if (!selectedSlot) return;
+    if (!selectedSlot || !selectedType) return;
     book.mutate({
       therapist_slug: slug,
+      session_type_id: selectedType.id,
       client_name: data.name,
       client_email: data.email,
       client_phone: data.phone || undefined,
@@ -121,6 +139,11 @@ export default function BookingFlow({ slug }: { slug: string }) {
 
   const t = therapist.data;
 
+  // Filter to active session types
+  const activeTypes = (t.session_types ?? []).filter(
+    (st: SelectedType & { is_active: boolean }) => st.is_active
+  );
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-cream-300 overflow-hidden">
       <div className="p-6 sm:p-8 space-y-6">
@@ -130,8 +153,6 @@ export default function BookingFlow({ slug }: { slug: string }) {
           bio={t.bio}
           qualifications={t.qualifications}
           avatarUrl={t.avatar_url}
-          durationMins={t.session_duration_mins}
-          rateInr={t.session_rate_inr}
         />
 
         <PolicyNotice
@@ -145,15 +166,59 @@ export default function BookingFlow({ slug }: { slug: string }) {
             therapistName={t.display_name}
             slotStart={selectedSlot!.start}
             slotEnd={selectedSlot!.end}
-            durationMins={t.session_duration_mins}
+            durationMins={selectedType!.duration_mins}
             zoomJoinUrl={zoomJoinUrl}
           />
         ) : (
           <div className="space-y-6">
-            <DatePicker
-              selectedDate={selectedDate}
-              onSelect={handleDateSelect}
-            />
+            {/* Step 1: Session type picker */}
+            {step === "type" && (
+              <SessionTypePicker
+                sessionTypes={activeTypes}
+                onSelect={handleTypeSelect}
+              />
+            )}
+
+            {/* Selected type summary (shown after picking) */}
+            {selectedType && step !== "type" && (
+              <div className="flex items-center justify-between bg-sage-50/60 border border-sage-100 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex items-center gap-1.5 text-xs font-medium text-sage">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    {selectedType.duration_mins} min
+                  </div>
+                  <span className="text-sm font-medium text-ink">{selectedType.name}</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-pill ${
+                    selectedType.rate_inr === 0
+                      ? "bg-sage-50 text-sage"
+                      : "bg-amber-50 text-amber-600"
+                  }`}>
+                    {selectedType.rate_inr === 0 ? "Free" : `₹${(selectedType.rate_inr / 100).toLocaleString("en-IN")}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("type");
+                    setSelectedSlot(null);
+                  }}
+                  className="text-xs text-sage font-medium hover:text-sage-600 transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+
+            {/* Step 2: Date & slot picker */}
+            {(step === "select" || step === "form") && (
+              <DatePicker
+                selectedDate={selectedDate}
+                onSelect={handleDateSelect}
+              />
+            )}
 
             {step === "select" && (
               <SlotGrid
@@ -164,12 +229,13 @@ export default function BookingFlow({ slug }: { slug: string }) {
               />
             )}
 
-            {step === "form" && selectedSlot && (
+            {/* Step 3: Booking form */}
+            {step === "form" && selectedSlot && selectedType && (
               <BookingForm
                 slotStart={selectedSlot.start}
                 slotEnd={selectedSlot.end}
-                durationMins={t.session_duration_mins}
-                rateInr={t.session_rate_inr}
+                durationMins={selectedType.duration_mins}
+                rateInr={selectedType.rate_inr}
                 loading={book.isPending}
                 onSubmit={handleBook}
                 onBack={() => setStep("select")}

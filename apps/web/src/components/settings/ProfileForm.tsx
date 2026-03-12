@@ -9,6 +9,7 @@ interface ProfileFormProps {
     bio: string | null;
     qualifications: string | null;
     phone: string | null;
+    gstin: string | null;
   };
 }
 
@@ -19,6 +20,7 @@ export default function ProfileForm({ therapist }: ProfileFormProps) {
   const [bio, setBio] = useState(therapist.bio ?? "");
   const [qualifications, setQualifications] = useState(therapist.qualifications ?? "");
   const [phone, setPhone] = useState(therapist.phone ?? "");
+  const [gstin, setGstin] = useState(therapist.gstin ?? "");
   const [saved, setSaved] = useState(false);
 
   const utils = trpc.useUtils();
@@ -49,6 +51,7 @@ export default function ProfileForm({ therapist }: ProfileFormProps) {
       bio: bio || null,
       qualifications: qualifications || null,
       phone: phone || null,
+      gstin: gstin || null,
     });
   }
 
@@ -161,6 +164,21 @@ export default function ProfileForm({ therapist }: ProfileFormProps) {
               className="w-full px-3.5 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm transition-shadow"
             />
           </div>
+        </div>
+
+        <div className="max-w-xs">
+          <label htmlFor="gstin" className="block text-xs font-medium text-ink-light mb-1.5">
+            GSTIN <span className="text-ink-lighter font-normal">(optional)</span>
+          </label>
+          <input
+            id="gstin"
+            type="text"
+            value={gstin}
+            onChange={(e) => setGstin(e.target.value.toUpperCase())}
+            maxLength={15}
+            placeholder="e.g. 27AABCU9603R1ZM"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm transition-shadow font-mono"
+          />
         </div>
 
         <div className="flex items-center gap-3 pt-1">

@@ -1,5 +1,5 @@
 import { router, publicProcedure, protectedProcedure } from "../trpc";
-import { updateTherapistSchema, setAvailabilitySchema } from "@mano/shared";
+import { updateTherapistSchema, setAvailabilitySchema, updateSessionTypesSchema } from "@mano/shared";
 import { z } from "zod";
 
 export const therapistRouter = router({
@@ -62,6 +62,24 @@ export const therapistRouter = router({
       return data;
     }),
 
+  /** Update session types configuration */
+  updateSessionTypes: protectedProcedure
+    .input(updateSessionTypesSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("therapists")
+        .update({
+          session_types: input.session_types,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", ctx.user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }),
+
   /** Get public profile by slug (for booking page) */
   getBySlug: publicProcedure
     .input(z.object({ slug: z.string() }))
@@ -69,7 +87,7 @@ export const therapistRouter = router({
       const { data, error } = await ctx.supabase
         .from("therapists")
         .select(
-          "id, full_name, display_name, slug, bio, qualifications, avatar_url, session_duration_mins, session_rate_inr, booking_page_active, cancellation_policy, late_policy, rescheduling_policy"
+          "id, full_name, display_name, slug, bio, qualifications, avatar_url, session_duration_mins, session_rate_inr, buffer_mins, booking_page_active, cancellation_policy, late_policy, rescheduling_policy, session_types"
         )
         .eq("slug", input.slug)
         .eq("booking_page_active", true)

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const bookSessionSchema = z.object({
   therapist_slug: z.string().min(2),
+  session_type_id: z.string().uuid(),
   client_name: z.string().min(1).max(200),
   client_email: z.string().email(),
   client_phone: z.string().max(20).optional(),
@@ -12,6 +13,7 @@ export const bookSessionSchema = z.object({
 
 export const getAvailableSlotsSchema = z.object({
   therapist_slug: z.string().min(2),
+  session_type_id: z.string().uuid(),
   from_date: z.string(), // YYYY-MM-DD
   to_date: z.string(),   // YYYY-MM-DD
 });

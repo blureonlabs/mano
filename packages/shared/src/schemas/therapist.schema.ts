@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+// Session type configuration (stored as JSONB array on therapists table)
+export const sessionTypeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  duration_mins: z.number().int().min(5).max(300),
+  rate_inr: z.number().int().min(0), // paise, 0 = free
+  description: z.string().max(500).nullable(),
+  is_active: z.boolean().default(true),
+  sort_order: z.number().int().min(0).default(0),
+});
+
+export type SessionType = z.infer<typeof sessionTypeSchema>;
+
+export const updateSessionTypesSchema = z.object({
+  session_types: z.array(sessionTypeSchema).min(1).max(10),
+});
+
+export type UpdateSessionTypesInput = z.infer<typeof updateSessionTypesSchema>;
+
 export const therapistSchema = z.object({
   id: z.string().uuid(),
   full_name: z.string().min(1).max(200),
@@ -17,6 +36,7 @@ export const therapistSchema = z.object({
   cancellation_policy: z.string().max(1000).nullable(),
   late_policy: z.string().max(1000).nullable(),
   rescheduling_policy: z.string().max(1000).nullable(),
+  session_types: z.array(sessionTypeSchema).default([]),
   gstin: z.string().max(15).nullable(),
   google_connected: z.boolean().default(false),
   zoom_connected: z.boolean().default(false),
@@ -39,6 +59,8 @@ export const createTherapistSchema = therapistSchema.pick({
   cancellation_policy: true,
   late_policy: true,
   rescheduling_policy: true,
+  session_types: true,
+  gstin: true,
 });
 
 export const updateTherapistSchema = createTherapistSchema.partial();

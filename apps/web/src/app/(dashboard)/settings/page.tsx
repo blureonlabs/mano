@@ -2,7 +2,7 @@
 
 import { trpc } from "@/lib/trpc";
 import ProfileForm from "@/components/settings/ProfileForm";
-import SessionSettings from "@/components/settings/SessionSettings";
+import SessionTypesEditor from "@/components/settings/SessionTypesEditor";
 import AvailabilityEditor from "@/components/settings/AvailabilityEditor";
 import IntegrationCards from "@/components/settings/IntegrationCards";
 import BookingPageSection from "@/components/settings/BookingPageSection";
@@ -60,15 +60,13 @@ export default function SettingsPage() {
           bio: t.bio,
           qualifications: t.qualifications,
           phone: t.phone,
+          gstin: t.gstin,
         }}
       />
 
-      <SessionSettings
-        therapist={{
-          session_duration_mins: t.session_duration_mins,
-          buffer_mins: t.buffer_mins,
-          session_rate_inr: t.session_rate_inr,
-        }}
+      <SessionTypesEditor
+        sessionTypes={t.session_types ?? []}
+        bufferMins={t.buffer_mins}
       />
 
       <AvailabilityEditor availability={availability.data ?? []} />

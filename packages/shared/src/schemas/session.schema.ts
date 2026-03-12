@@ -33,6 +33,7 @@ export const sessionSchema = z.object({
   reminder_24h_sent: z.boolean().default(false),
   reminder_1h_sent: z.boolean().default(false),
   session_number: z.number().int().nullable(),
+  session_type_name: z.string().nullable(),
   cancellation_reason: z.string().nullable(),
   cancelled_at: z.string().datetime().nullable(),
   created_at: z.string().datetime(),
