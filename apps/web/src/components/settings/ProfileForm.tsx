@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 interface ProfileFormProps {
   therapist: {
@@ -21,22 +22,14 @@ export default function ProfileForm({ therapist }: ProfileFormProps) {
   const [qualifications, setQualifications] = useState(therapist.qualifications ?? "");
   const [phone, setPhone] = useState(therapist.phone ?? "");
   const [gstin, setGstin] = useState(therapist.gstin ?? "");
-  const [saved, setSaved] = useState(false);
-
   const utils = trpc.useUtils();
   const update = trpc.therapist.update.useMutation({
     onSuccess: () => {
       utils.therapist.me.invalidate();
-      setSaved(true);
+      toast.success("Profile saved");
     },
+    onError: (err) => toast.error(err.message),
   });
-
-  useEffect(() => {
-    if (saved) {
-      const t = setTimeout(() => setSaved(false), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [saved]);
 
   function handleSlugChange(val: string) {
     setSlug(val.toLowerCase().replace(/[^a-z0-9-]/g, ""));
@@ -189,11 +182,6 @@ export default function ProfileForm({ therapist }: ProfileFormProps) {
           >
             {update.isPending ? "Saving..." : "Save Profile"}
           </button>
-          {saved && (
-            <span className="text-sm text-sage font-medium animate-pulse">
-              Saved!
-            </span>
-          )}
           {update.error && (
             <span className="text-sm text-red-600">
               {update.error.message}

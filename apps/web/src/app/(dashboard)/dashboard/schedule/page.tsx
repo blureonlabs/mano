@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { getMonday, startOfDayIST, endOfDayIST, endOfWeekIST } from "@/lib/date-utils";
 import ScheduleHeader from "@/components/schedule/ScheduleHeader";
 import WeekView from "@/components/schedule/WeekView";
@@ -49,21 +50,39 @@ export default function SchedulePage() {
   }
 
   // Session mutations
-  const approve = trpc.session.approve.useMutation({ onSuccess: invalidateAll });
-  const reject = trpc.session.reject.useMutation({ onSuccess: invalidateAll });
-  const complete = trpc.session.complete.useMutation({ onSuccess: invalidateAll });
-  const cancel = trpc.session.cancel.useMutation({ onSuccess: invalidateAll });
-  const markNoShow = trpc.session.markNoShow.useMutation({ onSuccess: invalidateAll });
+  const approve = trpc.session.approve.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Session approved"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const reject = trpc.session.reject.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Booking declined"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const complete = trpc.session.complete.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Session marked as completed"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const cancel = trpc.session.cancel.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Session cancelled"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const markNoShow = trpc.session.markNoShow.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Session marked as no-show"); },
+    onError: (err) => toast.error(err.message),
+  });
 
   // Blocked slot mutations
   const createBlock = trpc.blockedSlot.create.useMutation({
     onSuccess: () => {
       utils.blockedSlot.list.invalidate();
       setAddBreakSlot(null);
+      toast.success("Break added");
     },
+    onError: (err) => toast.error(err.message),
   });
   const deleteBlock = trpc.blockedSlot.delete.useMutation({
-    onSuccess: () => utils.blockedSlot.list.invalidate(),
+    onSuccess: () => { utils.blockedSlot.list.invalidate(); toast.success("Break removed"); },
+    onError: (err) => toast.error(err.message),
   });
 
   const isActing =

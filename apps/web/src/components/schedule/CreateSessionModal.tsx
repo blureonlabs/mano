@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { X } from "lucide-react";
 import { toISTDateString } from "@/lib/date-utils";
 
@@ -53,7 +54,11 @@ export default function CreateSessionModal({ onClose, onCreated }: CreateSession
   }
 
   const createSession = trpc.session.create.useMutation({
-    onSuccess: () => onCreated(),
+    onSuccess: () => {
+      toast.success("Session created");
+      onCreated();
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   function handleSubmit(e: React.FormEvent) {

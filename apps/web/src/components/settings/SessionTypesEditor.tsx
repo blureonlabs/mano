@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { SESSION_DURATIONS } from "@mano/shared";
 import type { SessionType } from "@mano/shared";
 import { Clock, Plus, Trash2 } from "lucide-react";
@@ -16,27 +17,21 @@ export default function SessionTypesEditor({ sessionTypes, bufferMins }: Session
     sessionTypes.length > 0 ? sessionTypes : []
   );
   const [buffer, setBuffer] = useState(bufferMins);
-  const [saved, setSaved] = useState(false);
 
   const utils = trpc.useUtils();
 
   const updateTypes = trpc.therapist.updateSessionTypes.useMutation({
     onSuccess: () => {
       utils.therapist.me.invalidate();
-      setSaved(true);
+      toast.success("Session types saved");
     },
+    onError: (err) => toast.error(err.message),
   });
 
   const updateBuffer = trpc.therapist.update.useMutation({
     onSuccess: () => utils.therapist.me.invalidate(),
+    onError: (err) => toast.error(err.message),
   });
-
-  useEffect(() => {
-    if (saved) {
-      const t = setTimeout(() => setSaved(false), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [saved]);
 
   function addType() {
     setTypes([
@@ -224,9 +219,6 @@ export default function SessionTypesEditor({ sessionTypes, bufferMins }: Session
           >
             {updateTypes.isPending ? "Saving..." : "Save Session Types"}
           </button>
-          {saved && (
-            <span className="text-sm text-sage font-medium animate-pulse">Saved!</span>
-          )}
           {updateTypes.error && (
             <span className="text-sm text-red-600">{updateTypes.error.message}</span>
           )}
