@@ -45,9 +45,9 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Vercel deployment (auto-deploy from dev)
 - [x] Supabase project (Mumbai region, linked)
 - [x] Supabase Storage (public assets bucket, logo uploaded)
-- [x] Environment variables set on Vercel (all 3 environments)
+- [x] Environment variables set on Vercel (all 3 environments, including ENCRYPTION_KEY)
 
-### Database (7 migrations pushed)
+### Database (7 migrations, all pushed to remote)
 - [x] Full schema — 12 tables: therapists, availability, blocked_slots, clients, sessions, session_notes, messages, invoices, treatment_plans, resources, client_resources
 - [x] 8 custom enums: session_status, payment_status, note_type, sender_type, invoice_status, treatment_plan_status, therapy_modality, resource_type
 - [x] RLS policies on all tables (therapist-scoped access)
@@ -230,6 +230,8 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 
 | # | Hash | Message |
 |---|------|---------|
+| 25 | 2eec6b7 | Fix decryption crash on legacy plaintext data |
+| 24 | 78a7738 | Update STATUS.md with encryption, new landing sections, and docs |
 | 23 | a7b6915 | Add AES-256-GCM column encryption for clinical data at rest |
 | 22 | 03fed65 | Use Unsplash images in blog teaser cards and fix card alignment |
 | 21 | 5594b59 | Add 4 landing page sections: How It Works, Booking Preview, FAQ, Blog Teaser |
@@ -264,7 +266,7 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 | 4 | 00004_add_booking_policies.sql | Cancellation/late/rescheduling policy columns |
 | 5 | 00005_add_treatment_plans.sql | treatment_plans table + modality/status enums |
 | 6 | 00006_add_resources.sql | resources + client_resources tables, GIN index |
-| 7 | 00007_encryption_column_types.sql | Change text[]/jsonb columns to text for encrypted data |
+| 7 | 00007_encryption_column_types.sql | Change text[]/jsonb columns to text for encrypted data (pushed) |
 
 ## Pages Summary (17 routes)
 
