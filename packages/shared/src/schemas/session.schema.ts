@@ -45,10 +45,25 @@ export const cancelSessionSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+export const listSessionsByDateRangeSchema = z.object({
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+});
+
+export const createManualSessionSchema = z.object({
+  client_id: z.string().uuid(),
+  session_type_id: z.string().uuid().optional(),
+  starts_at: z.string().datetime(),
+  ends_at: z.string().datetime(),
+  notes: z.string().max(500).optional(),
+});
+
 export type Session = z.infer<typeof sessionSchema>;
 export type SessionStatus = z.infer<typeof sessionStatusEnum>;
 export type PaymentStatus = z.infer<typeof paymentStatusEnum>;
 export type CancelSessionInput = z.infer<typeof cancelSessionSchema>;
+export type ListSessionsByDateRangeInput = z.infer<typeof listSessionsByDateRangeSchema>;
+export type CreateManualSessionInput = z.infer<typeof createManualSessionSchema>;
 
 // Session Notes
 export const noteTypeEnum = z.enum(["soap", "dap", "birp", "freeform"]);

@@ -8,6 +8,7 @@ import { messageRouter } from "./routers/message";
 import { integrationRouter } from "./routers/integration";
 import { treatmentPlanRouter } from "./routers/treatment-plan";
 import { resourceRouter } from "./routers/resource";
+import { blockedSlotRouter } from "./routers/blocked-slot";
 
 export const appRouter = router({
   therapist: therapistRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   integration: integrationRouter,
   treatmentPlan: treatmentPlanRouter,
   resource: resourceRouter,
+  blockedSlot: blockedSlotRouter,
 });
 
 export type AppRouter = typeof appRouter;

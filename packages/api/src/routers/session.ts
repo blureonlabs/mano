@@ -157,6 +157,103 @@ export const sessionRouter = router({
       return data;
     }),
 
+  /** Get all sessions within a date range (for calendar view) */
+  listByDateRange: protectedProcedure
+    .input(z.object({
+      from: z.string().datetime(),
+      to: z.string().datetime(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("sessions")
+        .select("*, clients(full_name, email, phone)")
+        .eq("therapist_id", ctx.user.id)
+        .gte("starts_at", input.from)
+        .lte("starts_at", input.to)
+        .order("starts_at");
+
+      if (error) throw error;
+      return data;
+    }),
+
+  /** Manually create a session (walk-in, phone, etc.) */
+  create: protectedProcedure
+    .input(z.object({
+      client_id: z.string().uuid(),
+      session_type_id: z.string().uuid().optional(),
+      starts_at: z.string().datetime(),
+      ends_at: z.string().datetime(),
+      notes: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Resolve session type for duration/rate
+      const { data: therapist } = await ctx.supabase
+        .from("therapists")
+        .select("session_duration_mins, session_rate_inr, session_types")
+        .eq("id", ctx.user.id)
+        .single();
+
+      const sessionTypes = (therapist?.session_types ?? []) as {
+        id: string; name: string; duration_mins: number; rate_inr: number;
+      }[];
+      const selectedType = input.session_type_id
+        ? sessionTypes.find((st) => st.id === input.session_type_id)
+        : null;
+
+      const durationMins = Math.round(
+        (new Date(input.ends_at).getTime() - new Date(input.starts_at).getTime()) / 60000
+      );
+      const rateInr = selectedType?.rate_inr ?? therapist?.session_rate_inr ?? 0;
+      const typeName = selectedType?.name ?? null;
+
+      // Get session number for this client
+      const { count } = await ctx.supabase
+        .from("sessions")
+        .select("*", { count: "exact", head: true })
+        .eq("client_id", input.client_id)
+        .eq("therapist_id", ctx.user.id);
+
+      // Insert as "scheduled" directly (therapist-created = auto-approved)
+      const { data, error } = await ctx.supabase
+        .from("sessions")
+        .insert({
+          therapist_id: ctx.user.id,
+          client_id: input.client_id,
+          starts_at: input.starts_at,
+          ends_at: input.ends_at,
+          duration_mins: durationMins,
+          status: "scheduled",
+          session_type_name: typeName,
+          payment_status: rateInr === 0 ? "waived" : "pending",
+          amount_inr: rateInr,
+          session_number: (count ?? 0) + 1,
+        })
+        .select("*, clients(full_name, email, phone)")
+        .single();
+
+      if (error) throw error;
+      return data;
+    }),
+
+  /** Mark a session as no-show */
+  markNoShow: protectedProcedure
+    .input(z.object({ session_id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("sessions")
+        .update({
+          status: "no_show",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }),
+
   /** Get sessions for a specific client */
   byClient: protectedProcedure
     .input(z.object({ client_id: z.string().uuid() }))
