@@ -1,4 +1,5 @@
 import { router, protectedProcedure } from "../trpc";
+import { TRPCError } from "@trpc/server";
 import {
   createBlockedSlotSchema,
   deleteBlockedSlotSchema,
@@ -37,7 +38,7 @@ export const blockedSlotRouter = router({
         .limit(1);
 
       if (overlapping && overlapping.length > 0) {
-        throw new Error("This break overlaps with an existing session.");
+        throw new TRPCError({ code: "CONFLICT", message: "This break overlaps with an existing session." });
       }
 
       const { data, error } = await ctx.supabase

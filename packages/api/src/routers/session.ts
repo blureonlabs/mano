@@ -4,6 +4,7 @@ import {
   updateSessionNoteSchema,
   cancelSessionSchema,
 } from "@mano/shared";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { encrypt, decrypt } from "../utils/encryption";
 
@@ -84,7 +85,7 @@ export const sessionRouter = router({
         .eq("status", "pending_approval")
         .single();
 
-      if (!session) throw new Error("Session not found or already processed.");
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found or already processed." });
 
       // Check for overlapping scheduled sessions (exclude this one)
       const { data: overlapping } = await ctx.supabase
@@ -99,7 +100,7 @@ export const sessionRouter = router({
         .limit(1);
 
       if (overlapping && overlapping.length > 0) {
-        throw new Error("Cannot approve — this time slot now conflicts with another session.");
+        throw new TRPCError({ code: "CONFLICT", message: "Cannot approve — this time slot now conflicts with another session." });
       }
 
       const { data, error } = await ctx.supabase
@@ -224,7 +225,7 @@ export const sessionRouter = router({
         .limit(1);
 
       if (overlapping && overlapping.length > 0) {
-        throw new Error("This time slot overlaps with an existing session.");
+        throw new TRPCError({ code: "CONFLICT", message: "This time slot overlaps with an existing session." });
       }
 
       // Check for overlapping blocked slots
@@ -237,7 +238,7 @@ export const sessionRouter = router({
         .limit(1);
 
       if (overlappingBlocks && overlappingBlocks.length > 0) {
-        throw new Error("This time slot overlaps with a blocked break.");
+        throw new TRPCError({ code: "CONFLICT", message: "This time slot overlaps with a blocked break." });
       }
 
       // Resolve session type for duration/rate
