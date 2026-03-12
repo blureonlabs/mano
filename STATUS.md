@@ -19,6 +19,7 @@ Privacy-first SaaS practice management platform for independent therapists in In
 | Backend/API | tRPC 11 (type-safe, extractable) |
 | Database | Supabase PostgreSQL + RLS |
 | Auth | Supabase Auth (email/password) |
+| Encryption | AES-256-GCM column encryption (clinical data at rest) |
 | Icons | Lucide React |
 | Payments | Razorpay (UPI, cards, netbanking) |
 | Video | Zoom SDK (OAuth) |
@@ -46,7 +47,7 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Supabase Storage (public assets bucket, logo uploaded)
 - [x] Environment variables set on Vercel (all 3 environments)
 
-### Database (6 migrations pushed)
+### Database (7 migrations pushed)
 - [x] Full schema — 12 tables: therapists, availability, blocked_slots, clients, sessions, session_notes, messages, invoices, treatment_plans, resources, client_resources
 - [x] 8 custom enums: session_status, payment_status, note_type, sender_type, invoice_status, treatment_plan_status, therapy_modality, resource_type
 - [x] RLS policies on all tables (therapist-scoped access)
@@ -54,6 +55,17 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Auto-updated_at triggers on all mutable tables
 - [x] `handle_new_user()` trigger — auto-creates therapist profile on signup
 - [x] Booking policies columns on therapists (cancellation, late, rescheduling)
+- [x] Column type migration for encrypted fields (text[] → text, jsonb → text)
+
+### Security & Encryption
+- [x] **AES-256-GCM column encryption** — clinical data encrypted before DB insert, decrypted after select
+- [x] Encryption utility (`packages/api/src/utils/encryption.ts`) — encrypt/decrypt strings, JSON, and field sets
+- [x] **Encrypted session notes**: subjective, objective, assessment, plan, freeform_content, homework, techniques_used, risk_flags
+- [x] **Encrypted treatment plans**: presenting_concerns, diagnosis, goals, notes
+- [x] **Encrypted messages**: content
+- [x] Legacy data fallback — try/catch handles unencrypted pre-migration data gracefully
+- [x] Server-managed key via `ENCRYPTION_KEY` env var (32-byte base64)
+- [x] Row-Level Security (RLS) on all tables — therapist can only access their own data
 
 ### Auth
 - [x] Signup page — Supabase signUp with full_name, auto therapist profile via trigger
@@ -61,14 +73,18 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Protected routes via middleware (dashboard, settings → redirect to /login)
 
 ### Landing Page (/)
-- [x] Full marketing page — 10 React components
+- [x] Full marketing page — 14 React components
 - [x] Navbar with scroll blur, hamburger menu, Sign In + Get Started CTAs
 - [x] Hero section with interactive demo browser mockup
+- [x] **How It Works** — 3-step flow (create account → set availability → share link) with dashed connectors
 - [x] Problem section (6 broken tools → Mano solution)
 - [x] Features grid (AI assistant, booking, payments, encryption, messaging)
+- [x] **Booking Preview** — mockup of client-facing booking page with calendar, time slots, therapist header
 - [x] Privacy principles + "Mano vs. the rest" comparison
 - [x] 3-tier pricing cards (Starter ₹999, Pro ₹1,999, Clinic ₹4,999)
 - [x] Testimonials (3 therapists)
+- [x] **FAQ** — 7-question accordion (data residency, client access, Zoom, payments, free trial, import)
+- [x] **Blog Teaser** — 3 placeholder article cards with Unsplash images
 - [x] CTA section → /signup
 - [x] Footer
 - [x] Fade-up scroll animations, responsive design
@@ -83,12 +99,12 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] tRPC setup with Supabase context + auth middleware
 - [x] **therapist** — profile CRUD, getBySlug (public)
 - [x] **client** — list, create, update, delete, getDetail (with session count/last session)
-- [x] **session** — byClient, today, thisWeek, createNote, updateNote, getNote, getNoteById, listNotes, deleteNote
+- [x] **session** — byClient, today, thisWeek, createNote, updateNote, getNote, getNoteById, listNotes, deleteNote (notes encrypted at rest)
 - [x] **booking** — availableSlots (public), createBooking (public), approve/reject
 - [x] **payment** — list, create
-- [x] **message** — list, send
+- [x] **message** — list, send (content encrypted at rest)
 - [x] **integration** — status, connect/disconnect
-- [x] **treatmentPlan** — list, getById, create, update, updateStatus, delete
+- [x] **treatmentPlan** — list, getById, create, update, updateStatus, delete (clinical fields encrypted at rest)
 - [x] **resource** — list, getById, create, update, delete, share, unshare, listShared
 
 ### Domain Logic (@mano/domain)
@@ -147,7 +163,7 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] **Create** (`/new`): PlanEditor with modality selector (11 pill buttons), presenting concerns, diagnosis, goal/sub-goal editor, date range, notes
 - [x] **Edit** (`/[planId]`): Loads existing plan into PlanEditor
 - [x] GoalList component: add/remove goals and sub-goals, completion checkboxes
-- [x] Plans stored as JSONB goals array for simplicity
+- [x] Plans stored as encrypted text (was JSONB, migrated for encryption support)
 
 ### Dashboard — Resources (`/dashboard/resources`)
 - [x] Resource library grid with type badges (file/link/worksheet), modality/category tags
@@ -165,6 +181,13 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [x] Availability editor (day/time per weekday, add/remove slots)
 - [x] Booking page toggle + live link
 - [x] Policies form (cancellation, late arrival, rescheduling — 3 textareas)
+
+### Documentation
+- [x] `docs/MANO_SAAS_ANALYSIS.md` — Full SaaS analysis
+- [x] `docs/TECHNICAL_ARCHITECTURE.md` — Supabase + Zoom + Google Calendar architecture
+- [x] `docs/COMPETITIVE_LANDSCAPE_2026.md` — Full competitor analysis (March 2026)
+- [x] `docs/COMP_ANALYSIS_PRACFLOW.md` — Deep dive on PracFlow (closest competitor)
+- [x] `docs/COMPLIANCE_RESEARCH.md` — DPDP Act, IT Act, Mental Healthcare Act, GDPR, HIPAA research
 
 ## What's SCAFFOLD (structure exists, needs real UI/wiring)
 
@@ -185,6 +208,10 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 
 ## What's NOT STARTED
 
+- [ ] Legal pages (/privacy, /terms) — needed for DPDP Act compliance
+- [ ] Consent banner + consent at signup
+- [ ] Audit logging (who accessed what, when)
+- [ ] Data deletion/export for clients (DPDP right to erasure)
 - [ ] Real-time messaging (Supabase Realtime)
 - [ ] Automated reminders (24h, 1h before session via WhatsApp/email)
 - [ ] Zoom meeting auto-creation on booking
@@ -197,13 +224,16 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 - [ ] File upload for resources (Supabase Storage integration)
 - [ ] Error tracking/monitoring
 - [ ] Unit/integration/E2E tests
-- [ ] DPDP Act compliance documentation
 - [ ] Custom domain setup (mano.app)
 
 ## Commits (dev branch)
 
 | # | Hash | Message |
 |---|------|---------|
+| 23 | a7b6915 | Add AES-256-GCM column encryption for clinical data at rest |
+| 22 | 03fed65 | Use Unsplash images in blog teaser cards and fix card alignment |
+| 21 | 5594b59 | Add 4 landing page sections: How It Works, Booking Preview, FAQ, Blog Teaser |
+| 20 | b81b069 | Update STATUS.md with all completed features and current state |
 | 19 | 97b92c7 | Add resource library and client sharing with modality/category tags |
 | 18 | 56f0226 | Add treatment plans: schema, API, editor UI, and client integration |
 | 17 | 98de0b3 | Add client detail page with session history and notes tabs |
@@ -234,12 +264,13 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 | 4 | 00004_add_booking_policies.sql | Cancellation/late/rescheduling policy columns |
 | 5 | 00005_add_treatment_plans.sql | treatment_plans table + modality/status enums |
 | 6 | 00006_add_resources.sql | resources + client_resources tables, GIN index |
+| 7 | 00007_encryption_column_types.sql | Change text[]/jsonb columns to text for encrypted data |
 
 ## Pages Summary (17 routes)
 
 | Route | Type | Description |
 |-------|------|-------------|
-| `/` | Static | Landing/marketing page |
+| `/` | Static | Landing/marketing page (14 sections) |
 | `/login` | Static | Login form |
 | `/signup` | Static | Signup form |
 | `/booking/[slug]` | Dynamic | Public booking page per therapist |
@@ -264,6 +295,9 @@ apps/web  →  @mano/api  →  @mano/domain  →  @mano/shared
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+
+# Encryption (32-byte base64 key for AES-256-GCM)
+ENCRYPTION_KEY=
 
 # Google Calendar OAuth
 GOOGLE_CLIENT_ID=
