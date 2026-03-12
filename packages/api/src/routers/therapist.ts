@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { updateTherapistSchema, setAvailabilitySchema } from "@mano/shared";
 import { z } from "zod";
 
@@ -63,7 +63,7 @@ export const therapistRouter = router({
     }),
 
   /** Get public profile by slug (for booking page) */
-  getBySlug: protectedProcedure
+  getBySlug: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
       const { data, error } = await ctx.supabase
