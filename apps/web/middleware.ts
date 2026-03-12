@@ -28,8 +28,8 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh auth session
-  await supabase.auth.getUser();
+  // Refresh auth session (single call, reused for protected route check)
+  const { data: { user } } = await supabase.auth.getUser();
 
   // --- Subdomain Routing ---
   // In production: vidhya.mano.app → booking page for "vidhya"
@@ -51,9 +51,6 @@ export async function middleware(request: NextRequest) {
 
   // --- Protected Routes ---
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings")) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
