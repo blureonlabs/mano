@@ -38,7 +38,9 @@ function decryptNote<T extends Record<string, unknown>>(note: T): T {
   const result = { ...note };
   for (const field of ENCRYPTED_NOTE_FIELDS) {
     if (field in result && result[field] != null && typeof result[field] === "string") {
-      (result as Record<string, unknown>)[field] = decrypt(result[field] as string);
+      try {
+        (result as Record<string, unknown>)[field] = decrypt(result[field] as string);
+      } catch { /* leave as-is if not encrypted (legacy data) */ }
     }
   }
   // Decrypt array fields back from encrypted JSON strings

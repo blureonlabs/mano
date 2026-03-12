@@ -24,7 +24,9 @@ function decryptPlan<T extends Record<string, unknown>>(plan: T): T {
   const result = { ...plan };
   for (const field of ENCRYPTED_TEXT_FIELDS) {
     if (field in result && result[field] != null && typeof result[field] === "string") {
-      (result as Record<string, unknown>)[field] = decrypt(result[field] as string);
+      try {
+        (result as Record<string, unknown>)[field] = decrypt(result[field] as string);
+      } catch { /* leave as-is if not encrypted (legacy data) */ }
     }
   }
   // Decrypt goals back from encrypted JSON string
