@@ -1,12 +1,22 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import { formatDateIST } from "@/lib/date-utils";
+
+interface BreakData {
+  id: string;
+  start_at: string;
+  end_at: string;
+  reason: string | null;
+}
 
 interface AddBreakModalProps {
   defaultStart: string; // ISO datetime
   defaultEnd: string;   // ISO datetime
+  existingBreak?: BreakData; // If provided, we're in edit mode
   onClose: () => void;
   onSave: (data: { start_at: string; end_at: string; reason?: string }) => void;
+  onUpdate?: (data: { id: string; start_at: string; end_at: string; reason?: string }) => void;
+  onDelete?: (id: string) => void;
   isSaving: boolean;
 }
 
@@ -31,13 +41,18 @@ function toISTDateStr(iso: string): string {
 export default function AddBreakModal({
   defaultStart,
   defaultEnd,
+  existingBreak,
   onClose,
   onSave,
+  onUpdate,
+  onDelete,
   isSaving,
 }: AddBreakModalProps) {
+  const isEditing = !!existingBreak;
   const [startTime, setStartTime] = useState(toTimeValue(defaultStart));
   const [endTime, setEndTime] = useState(toTimeValue(defaultEnd));
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(existingBreak?.reason ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const dateStr = toISTDateStr(defaultStart);
 
@@ -45,7 +60,21 @@ export default function AddBreakModal({
     e.preventDefault();
     const start_at = new Date(`${dateStr}T${startTime}:00+05:30`).toISOString();
     const end_at = new Date(`${dateStr}T${endTime}:00+05:30`).toISOString();
-    onSave({ start_at, end_at, reason: reason || undefined });
+    if (isEditing && onUpdate) {
+      onUpdate({ id: existingBreak.id, start_at, end_at, reason: reason || undefined });
+    } else {
+      onSave({ start_at, end_at, reason: reason || undefined });
+    }
+  }
+
+  function handleDelete() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    if (existingBreak && onDelete) {
+      onDelete(existingBreak.id);
+    }
   }
 
   return (
@@ -55,7 +84,9 @@ export default function AddBreakModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-heading font-semibold text-ink">Add Break</h3>
+          <h3 className="text-base font-heading font-semibold text-ink">
+            {isEditing ? "Edit Break" : "Add Break"}
+          </h3>
           <button onClick={onClose} className="p-1 text-ink-lighter hover:text-ink transition-colors">
             <X size={18} />
           </button>
@@ -107,8 +138,23 @@ export default function AddBreakModal({
               disabled={isSaving}
               className="flex-1 bg-sage text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-sage-500 transition-all disabled:opacity-50"
             >
-              {isSaving ? "Saving..." : "Add Break"}
+              {isSaving ? "Saving..." : isEditing ? "Update Break" : "Add Break"}
             </button>
+            {isEditing && onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isSaving}
+                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-50 ${
+                  confirmDelete
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "border border-red-200 text-red-600 hover:bg-red-50"
+                }`}
+              >
+                <Trash2 size={14} className="inline -mt-0.5" />
+                {confirmDelete ? " Confirm" : ""}
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

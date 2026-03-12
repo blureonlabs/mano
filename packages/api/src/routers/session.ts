@@ -290,6 +290,90 @@ export const sessionRouter = router({
       return data;
     }),
 
+  /** Reschedule a session (update timing) */
+  reschedule: protectedProcedure
+    .input(z.object({
+      session_id: z.string().uuid(),
+      starts_at: z.string().datetime(),
+      ends_at: z.string().datetime(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify session exists and belongs to therapist
+      const { data: session } = await ctx.supabase
+        .from("sessions")
+        .select("id, status")
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id)
+        .single();
+
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found." });
+      if (session.status === "cancelled" || session.status === "completed" || session.status === "no_show") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot reschedule a session that is already completed, cancelled, or no-show." });
+      }
+
+      // Check for overlapping sessions (exclude this one)
+      const { data: overlapping } = await ctx.supabase
+        .from("sessions")
+        .select("id")
+        .eq("therapist_id", ctx.user.id)
+        .neq("id", input.session_id)
+        .neq("status", "cancelled")
+        .lt("starts_at", input.ends_at)
+        .gt("ends_at", input.starts_at)
+        .limit(1);
+
+      if (overlapping && overlapping.length > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "New time overlaps with an existing session." });
+      }
+
+      // Check for overlapping blocked slots
+      const { data: overlappingBlocks } = await ctx.supabase
+        .from("blocked_slots")
+        .select("id")
+        .eq("therapist_id", ctx.user.id)
+        .lt("start_at", input.ends_at)
+        .gt("end_at", input.starts_at)
+        .limit(1);
+
+      if (overlappingBlocks && overlappingBlocks.length > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "New time overlaps with a blocked break." });
+      }
+
+      const durationMins = Math.round(
+        (new Date(input.ends_at).getTime() - new Date(input.starts_at).getTime()) / 60000
+      );
+
+      const { data, error } = await ctx.supabase
+        .from("sessions")
+        .update({
+          starts_at: input.starts_at,
+          ends_at: input.ends_at,
+          duration_mins: durationMins,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id)
+        .select("*, clients(full_name, email, phone)")
+        .single();
+
+      if (error) throw error;
+      return data;
+    }),
+
+  /** Delete a session permanently */
+  delete: protectedProcedure
+    .input(z.object({ session_id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("sessions")
+        .delete()
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id);
+
+      if (error) throw error;
+      return { success: true };
+    }),
+
   /** Mark a session as no-show */
   markNoShow: protectedProcedure
     .input(z.object({ session_id: z.string().uuid() }))

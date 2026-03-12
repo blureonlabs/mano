@@ -66,21 +66,25 @@ export default function SessionBlock({
 interface BlockedSlotBlockProps {
   id: string;
   reason: string | null;
+  startAt: string;
+  endAt: string;
   top: number;
   height: number;
-  onDelete: (id: string) => void;
+  onClick: (block: { id: string; start_at: string; end_at: string; reason: string | null }) => void;
 }
 
 export function BlockedSlotBlock({
   id,
   reason,
+  startAt,
+  endAt,
   top,
   height,
-  onDelete,
+  onClick,
 }: BlockedSlotBlockProps) {
   return (
     <button
-      onClick={() => onDelete(id)}
+      onClick={() => onClick({ id, start_at: startAt, end_at: endAt, reason })}
       className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden cursor-pointer transition-colors bg-cream-200/60 hover:bg-cream-300/60 border border-dashed border-cream-400"
       style={{
         top: `${top}px`,
@@ -88,7 +92,7 @@ export function BlockedSlotBlock({
         backgroundImage:
           "repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(0,0,0,0.03) 4px, rgba(0,0,0,0.03) 8px)",
       }}
-      title={reason ? `Break: ${reason} (click to remove)` : "Break (click to remove)"}
+      title={reason ? `Break: ${reason} (click to edit)` : "Break (click to edit)"}
     >
       <span className="text-[10px] text-ink-lighter truncate block">
         {reason || "Break"}

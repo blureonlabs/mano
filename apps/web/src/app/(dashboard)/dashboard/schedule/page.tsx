@@ -15,6 +15,12 @@ import CreateSessionModal from "@/components/schedule/CreateSessionModal";
 type ViewMode = "calendar" | "list";
 type CalendarView = "week" | "day";
 
+interface BreakModalData {
+  start: string;
+  end: string;
+  existing?: { id: string; start_at: string; end_at: string; reason: string | null };
+}
+
 export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [calendarView, setCalendarView] = useState<CalendarView>("week");
@@ -22,7 +28,7 @@ export default function SchedulePage() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   // Modal states
-  const [addBreakSlot, setAddBreakSlot] = useState<{ start: string; end: string } | null>(null);
+  const [breakModal, setBreakModal] = useState<BreakModalData | null>(null);
   const [createSessionOpen, setCreateSessionOpen] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
@@ -70,24 +76,54 @@ export default function SchedulePage() {
     onSuccess: () => { invalidateAll(); toast.success("Session marked as no-show"); },
     onError: (err) => toast.error(err.message),
   });
+  const reschedule = trpc.session.reschedule.useMutation({
+    onSuccess: () => {
+      invalidateAll();
+      setSelectedSessionId(null);
+      toast.success("Session rescheduled");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const deleteSession = trpc.session.delete.useMutation({
+    onSuccess: () => {
+      invalidateAll();
+      setSelectedSessionId(null);
+      toast.success("Session deleted");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   // Blocked slot mutations
   const createBlock = trpc.blockedSlot.create.useMutation({
     onSuccess: () => {
       utils.blockedSlot.list.invalidate();
-      setAddBreakSlot(null);
+      setBreakModal(null);
       toast.success("Break added");
     },
     onError: (err) => toast.error(err.message),
   });
+  const updateBlock = trpc.blockedSlot.update.useMutation({
+    onSuccess: () => {
+      utils.blockedSlot.list.invalidate();
+      setBreakModal(null);
+      toast.success("Break updated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const deleteBlock = trpc.blockedSlot.delete.useMutation({
-    onSuccess: () => { utils.blockedSlot.list.invalidate(); toast.success("Break removed"); },
+    onSuccess: () => {
+      utils.blockedSlot.list.invalidate();
+      setBreakModal(null);
+      toast.success("Break removed");
+    },
     onError: (err) => toast.error(err.message),
   });
 
   const isActing =
     approve.isPending || reject.isPending || complete.isPending ||
-    cancel.isPending || markNoShow.isPending;
+    cancel.isPending || markNoShow.isPending || reschedule.isPending ||
+    deleteSession.isPending || createBlock.isPending || updateBlock.isPending ||
+    deleteBlock.isPending;
 
   // Navigation
   function goToPrevWeek() {
@@ -118,6 +154,14 @@ export default function SchedulePage() {
     setSelectedDay(null);
   }
 
+  function onBlockedSlotClick(block: { id: string; start_at: string; end_at: string; reason: string | null }) {
+    setBreakModal({
+      start: block.start_at,
+      end: block.end_at,
+      existing: block,
+    });
+  }
+
   // Find the selected session for the popover
   const selectedSession = useMemo(() => {
     if (!selectedSessionId || !sessions.data) return null;
@@ -128,7 +172,17 @@ export default function SchedulePage() {
   const allSessions = sessions.data ?? [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Loading overlay */}
+      {isActing && (
+        <div className="fixed inset-0 z-40 bg-white/40 flex items-center justify-center pointer-events-auto">
+          <div className="bg-white rounded-xl border border-cream-300 shadow-lg px-5 py-3 flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-sage border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-ink-light font-medium">Processing...</span>
+          </div>
+        </div>
+      )}
+
       <ScheduleHeader
         viewMode={viewMode}
         calendarView={calendarView}
@@ -184,7 +238,8 @@ export default function SchedulePage() {
           blockedSlots={(blockedSlots.data ?? []) as any}
           isLoading={sessions.isLoading}
           onSessionClick={(id) => setSelectedSessionId(id)}
-          onEmptySlotClick={(start, end) => setAddBreakSlot({ start, end })}
+          onEmptySlotClick={(start, end) => setBreakModal({ start, end })}
+          onBlockedSlotClick={onBlockedSlotClick}
           onDayClick={onDayClick}
         />
       ) : (
@@ -194,7 +249,8 @@ export default function SchedulePage() {
           blockedSlots={(blockedSlots.data ?? []) as any}
           isLoading={sessions.isLoading}
           onSessionClick={(id) => setSelectedSessionId(id)}
-          onEmptySlotClick={(start, end) => setAddBreakSlot({ start, end })}
+          onEmptySlotClick={(start, end) => setBreakModal({ start, end })}
+          onBlockedSlotClick={onBlockedSlotClick}
         />
       )}
 
@@ -223,18 +279,23 @@ export default function SchedulePage() {
             markNoShow.mutate({ session_id: selectedSession.id });
             setSelectedSessionId(null);
           }}
+          onReschedule={(data) => reschedule.mutate(data)}
+          onDelete={(id) => deleteSession.mutate({ session_id: id })}
           isLoading={isActing}
         />
       )}
 
-      {/* Add break modal */}
-      {addBreakSlot && (
+      {/* Break modal (create or edit) */}
+      {breakModal && (
         <AddBreakModal
-          defaultStart={addBreakSlot.start}
-          defaultEnd={addBreakSlot.end}
-          onClose={() => setAddBreakSlot(null)}
+          defaultStart={breakModal.start}
+          defaultEnd={breakModal.end}
+          existingBreak={breakModal.existing}
+          onClose={() => setBreakModal(null)}
           onSave={(data) => createBlock.mutate(data)}
-          isSaving={createBlock.isPending}
+          onUpdate={(data) => updateBlock.mutate(data)}
+          onDelete={(id) => deleteBlock.mutate({ id })}
+          isSaving={createBlock.isPending || updateBlock.isPending || deleteBlock.isPending}
         />
       )}
 

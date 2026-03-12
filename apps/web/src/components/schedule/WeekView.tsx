@@ -38,6 +38,7 @@ interface WeekViewProps {
   isLoading: boolean;
   onSessionClick: (id: string) => void;
   onEmptySlotClick: (start: string, end: string) => void;
+  onBlockedSlotClick: (block: { id: string; start_at: string; end_at: string; reason: string | null }) => void;
   onDayClick: (day: Date) => void;
 }
 
@@ -62,6 +63,7 @@ export default function WeekView({
   isLoading,
   onSessionClick,
   onEmptySlotClick,
+  onBlockedSlotClick,
   onDayClick,
 }: WeekViewProps) {
   const days = useMemo(() => getWeekDays(weekStart), [weekStart]);
@@ -187,9 +189,11 @@ export default function WeekView({
                         key={block.id}
                         id={block.id}
                         reason={block.reason}
+                        startAt={block.start_at}
+                        endAt={block.end_at}
                         top={pos.top}
                         height={pos.height}
-                        onDelete={() => {}} // Deletion handled by parent
+                        onClick={onBlockedSlotClick}
                       />
                     );
                   })}

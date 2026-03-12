@@ -36,6 +36,7 @@ interface DayViewProps {
   isLoading: boolean;
   onSessionClick: (id: string) => void;
   onEmptySlotClick: (start: string, end: string) => void;
+  onBlockedSlotClick: (block: { id: string; start_at: string; end_at: string; reason: string | null }) => void;
 }
 
 function getBlockPosition(startISO: string, endISO: string) {
@@ -59,6 +60,7 @@ export default function DayView({
   isLoading,
   onSessionClick,
   onEmptySlotClick,
+  onBlockedSlotClick,
 }: DayViewProps) {
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
 
@@ -132,9 +134,11 @@ export default function DayView({
                 key={block.id}
                 id={block.id}
                 reason={block.reason}
+                startAt={block.start_at}
+                endAt={block.end_at}
                 top={pos.top}
                 height={pos.height}
-                onDelete={() => {}}
+                onClick={onBlockedSlotClick}
               />
             );
           })}
