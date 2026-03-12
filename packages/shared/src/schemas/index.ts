@@ -4,3 +4,4 @@ export * from "./session.schema";
 export * from "./booking.schema";
 export * from "./payment.schema";
 export * from "./message.schema";
+export * from "./treatment-plan.schema";
