@@ -24,10 +24,10 @@ export default function DatePicker({ selectedDate, onSelect }: DatePickerProps) 
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-medium text-ink-lighter uppercase tracking-wider">
+      <h3 className="text-xs font-semibold text-ink-lighter uppercase tracking-wider">
         Select a date
       </h3>
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+      <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
         {dates.map((d) => {
           const dateStr = toDateStr(d);
           const isSelected = dateStr === selectedDate;
@@ -37,19 +37,27 @@ export default function DatePicker({ selectedDate, onSelect }: DatePickerProps) 
             <button
               key={dateStr}
               onClick={() => onSelect(dateStr)}
-              className={`flex-shrink-0 w-[68px] py-3 rounded-small border text-center transition-all ${
+              className={`flex-shrink-0 w-16 py-2.5 rounded-xl text-center transition-all duration-200 ${
                 isSelected
-                  ? "bg-sage text-white border-sage shadow-sm"
-                  : "bg-card border-cream-300 text-ink hover:border-sage-200 hover:bg-sage-50"
+                  ? "bg-sage text-white shadow-md shadow-sage/20 scale-[1.02]"
+                  : "bg-white border border-cream-300 text-ink hover:border-sage-200 hover:shadow-sm"
               }`}
             >
-              <div className={`text-[11px] font-medium ${isSelected ? "text-white/80" : "text-ink-lighter"}`}>
+              <div
+                className={`text-[10px] font-semibold uppercase tracking-wide ${
+                  isSelected ? "text-white/70" : "text-ink-lighter"
+                }`}
+              >
                 {isToday ? "Today" : DAYS[d.getDay()]}
               </div>
-              <div className="text-lg font-heading font-semibold">
+              <div className="text-[18px] font-heading font-bold leading-tight mt-0.5">
                 {d.getDate()}
               </div>
-              <div className={`text-[11px] ${isSelected ? "text-white/70" : "text-ink-lighter"}`}>
+              <div
+                className={`text-[10px] mt-0.5 ${
+                  isSelected ? "text-white/60" : "text-ink-lighter"
+                }`}
+              >
                 {MONTHS[d.getMonth()]}
               </div>
             </button>

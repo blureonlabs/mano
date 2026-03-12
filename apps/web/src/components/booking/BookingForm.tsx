@@ -13,7 +13,7 @@ interface BookingFormProps {
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-IN", {
-    weekday: "long",
+    weekday: "short",
     day: "numeric",
     month: "long",
     timeZone: "Asia/Kolkata",
@@ -50,66 +50,104 @@ export default function BookingForm({
   return (
     <div className="space-y-5">
       {/* Session summary */}
-      <div className="bg-sage-50 border border-sage-200 rounded-small p-4">
-        <div className="text-sm font-medium text-sage mb-1">Your session</div>
-        <div className="text-ink font-heading font-medium">
-          {formatDateTime(slotStart)}
+      <div className="bg-sage-50/60 border border-sage-100 rounded-xl p-4 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-sage/10 flex items-center justify-center flex-shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-sage">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
         </div>
-        <div className="text-sm text-ink-light">
-          {formatTime(slotStart)} &ndash; {formatTime(slotEnd)} &middot; {durationMins} min
-        </div>
-        {rateInr > 0 && (
-          <div className="text-sm font-medium text-amber mt-1">
-            ₹{(rateInr / 100).toLocaleString("en-IN")}
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-ink">
+            {formatDateTime(slotStart)}
           </div>
-        )}
+          <div className="text-xs text-ink-light">
+            {formatTime(slotStart)} &ndash; {formatTime(slotEnd)} &middot; {durationMins} min
+            {rateInr > 0 && (
+              <span className="text-amber font-medium ml-1">
+                &middot; ₹{(rateInr / 100).toLocaleString("en-IN")}
+              </span>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="ml-auto text-xs text-sage font-medium hover:text-sage-600 transition-colors flex-shrink-0"
+        >
+          Change
+        </button>
       </div>
 
       {/* Client details form */}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <h3 className="text-sm font-medium text-ink-lighter uppercase tracking-wider">
+        <h3 className="text-xs font-semibold text-ink-lighter uppercase tracking-wider">
           Your details
         </h3>
-        <input
-          type="text"
-          placeholder="Full name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          className="w-full px-4 py-3 rounded-small border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage text-sm"
-        />
-        <input
-          type="email"
-          placeholder="Email address"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full px-4 py-3 rounded-small border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage text-sm"
-        />
-        <input
-          type="tel"
-          placeholder="Phone number (optional)"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="w-full px-4 py-3 rounded-small border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage text-sm"
-        />
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-5 py-3 rounded-small border border-cream-300 text-ink-light text-sm font-medium hover:bg-cream transition-colors"
-          >
-            Back
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 bg-sage text-white py-3 rounded-small font-medium text-sm hover:bg-sage-500 transition-colors disabled:opacity-50"
-          >
-            {loading ? "Booking..." : "Confirm Booking"}
-          </button>
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="name" className="block text-xs font-medium text-ink-light mb-1.5">
+              Full name
+            </label>
+            <input
+              id="name"
+              type="text"
+              placeholder="e.g. Priya Sharma"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm transition-shadow"
+            />
+          </div>
+          <div>
+            <label htmlFor="email" className="block text-xs font-medium text-ink-light mb-1.5">
+              Email address
+            </label>
+            <input
+              id="email"
+              type="email"
+              placeholder="priya@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm transition-shadow"
+            />
+          </div>
+          <div>
+            <label htmlFor="phone" className="block text-xs font-medium text-ink-light mb-1.5">
+              Phone number <span className="text-ink-lighter font-normal">(optional)</span>
+            </label>
+            <input
+              id="phone"
+              type="tel"
+              placeholder="+91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm transition-shadow"
+            />
+          </div>
         </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-sage text-white py-3 rounded-xl font-semibold text-sm hover:bg-sage-500 transition-all duration-200 disabled:opacity-50 shadow-md shadow-sage/20 hover:shadow-lg hover:shadow-sage/25"
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Booking...
+            </span>
+          ) : (
+            "Confirm Booking"
+          )}
+        </button>
       </form>
     </div>
   );
