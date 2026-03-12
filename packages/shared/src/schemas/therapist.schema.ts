@@ -32,6 +32,7 @@ export const createTherapistSchema = therapistSchema.pick({
   session_duration_mins: true,
   buffer_mins: true,
   session_rate_inr: true,
+  booking_page_active: true,
 });
 
 export const updateTherapistSchema = createTherapistSchema.partial();

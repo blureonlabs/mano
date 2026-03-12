@@ -9,7 +9,7 @@ import { integrationRouter } from "./routers/integration";
 
 export const appRouter = router({
   therapist: therapistRouter,
-  client: clientRouter,
+  clients: clientRouter,
   session: sessionRouter,
   booking: bookingRouter,
   payment: paymentRouter,
