@@ -1,9 +1,21 @@
 import { router, protectedProcedure } from "../trpc";
 import { sendMessageSchema } from "@mano/shared";
 import { z } from "zod";
+import { encrypt, decrypt } from "../utils/encryption";
+
+function decryptMessage<T extends Record<string, unknown>>(msg: T): T {
+  const result = { ...msg };
+  if (result.content != null && typeof result.content === "string") {
+    try {
+      const decrypted = decrypt(result.content as string);
+      if (decrypted != null) (result as Record<string, unknown>).content = decrypted;
+    } catch { /* leave as-is if not encrypted (legacy data) */ }
+  }
+  return result;
+}
 
 export const messageRouter = router({
-  /** Get messages for a client (paginated) */
+  /** Get messages for a client (paginated, content decrypted) */
   list: protectedProcedure
     .input(
       z.object({
@@ -29,7 +41,8 @@ export const messageRouter = router({
       if (error) throw error;
 
       const hasMore = data && data.length > input.limit;
-      const messages = hasMore ? data.slice(0, -1) : (data ?? []);
+      const raw = hasMore ? data.slice(0, -1) : (data ?? []);
+      const messages = raw.map((msg) => decryptMessage(msg));
 
       return {
         messages,
@@ -37,7 +50,7 @@ export const messageRouter = router({
       };
     }),
 
-  /** Send a message to a client */
+  /** Send a message to a client (content encrypted at rest) */
   send: protectedProcedure
     .input(sendMessageSchema)
     .mutation(async ({ ctx, input }) => {
@@ -47,7 +60,7 @@ export const messageRouter = router({
           therapist_id: ctx.user.id,
           client_id: input.client_id,
           sender_type: "therapist",
-          content: input.content,
+          content: encrypt(input.content),
         })
         .select()
         .single();
@@ -56,7 +69,7 @@ export const messageRouter = router({
 
       // TODO: Send via WhatsApp/Email using @mano/integrations
 
-      return data;
+      return decryptMessage(data as Record<string, unknown>);
     }),
 
   /** Mark messages as read */

@@ -5,6 +5,55 @@ import {
   cancelSessionSchema,
 } from "@mano/shared";
 import { z } from "zod";
+import { encrypt, decrypt } from "../utils/encryption";
+
+/** Fields in session_notes that contain clinical data and must be encrypted at rest */
+const ENCRYPTED_NOTE_FIELDS = [
+  "subjective",
+  "objective",
+  "assessment",
+  "plan",
+  "freeform_content",
+  "homework",
+] as const;
+
+function encryptNoteInput(input: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...input };
+  for (const field of ENCRYPTED_NOTE_FIELDS) {
+    if (field in result && result[field] != null && typeof result[field] === "string") {
+      result[field] = encrypt(result[field] as string);
+    }
+  }
+  // Encrypt array fields as JSON strings
+  if (result.techniques_used != null) {
+    result.techniques_used = encrypt(JSON.stringify(result.techniques_used));
+  }
+  if (result.risk_flags != null) {
+    result.risk_flags = encrypt(JSON.stringify(result.risk_flags));
+  }
+  return result;
+}
+
+function decryptNote<T extends Record<string, unknown>>(note: T): T {
+  const result = { ...note };
+  for (const field of ENCRYPTED_NOTE_FIELDS) {
+    if (field in result && result[field] != null && typeof result[field] === "string") {
+      (result as Record<string, unknown>)[field] = decrypt(result[field] as string);
+    }
+  }
+  // Decrypt array fields back from encrypted JSON strings
+  if (result.techniques_used != null && typeof result.techniques_used === "string") {
+    try {
+      (result as Record<string, unknown>).techniques_used = JSON.parse(decrypt(result.techniques_used as string) ?? "[]");
+    } catch { /* leave as-is if not encrypted (legacy data) */ }
+  }
+  if (result.risk_flags != null && typeof result.risk_flags === "string") {
+    try {
+      (result as Record<string, unknown>).risk_flags = JSON.parse(decrypt(result.risk_flags as string) ?? "[]");
+    } catch { /* leave as-is if not encrypted (legacy data) */ }
+  }
+  return result;
+}
 
 export const sessionRouter = router({
   /** Get sessions pending therapist approval */
@@ -163,24 +212,25 @@ export const sessionRouter = router({
       return data;
     }),
 
-  /** Create session note */
+  /** Create session note (clinical fields encrypted at rest) */
   createNote: protectedProcedure
     .input(createSessionNoteSchema)
     .mutation(async ({ ctx, input }) => {
+      const encrypted = encryptNoteInput({ ...input });
       const { data, error } = await ctx.supabase
         .from("session_notes")
         .insert({
           therapist_id: ctx.user.id,
-          ...input,
+          ...encrypted,
         })
         .select()
         .single();
 
       if (error) throw error;
-      return data;
+      return decryptNote(data);
     }),
 
-  /** Update session note */
+  /** Update session note (clinical fields encrypted at rest) */
   updateNote: protectedProcedure
     .input(
       z.object({
@@ -189,16 +239,17 @@ export const sessionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const encrypted = encryptNoteInput({ ...input.data });
       const { data, error } = await ctx.supabase
         .from("session_notes")
-        .update({ ...input.data, updated_at: new Date().toISOString() })
+        .update({ ...encrypted, updated_at: new Date().toISOString() })
         .eq("id", input.note_id)
         .eq("therapist_id", ctx.user.id)
         .select()
         .single();
 
       if (error) throw error;
-      return data;
+      return decryptNote(data);
     }),
 
   /** Get note for a session */
@@ -213,7 +264,7 @@ export const sessionRouter = router({
         .single();
 
       if (error && error.code !== "PGRST116") throw error; // PGRST116 = not found
-      return data;
+      return data ? decryptNote(data) : null;
     }),
 
   /** Get note by ID */
@@ -228,7 +279,7 @@ export const sessionRouter = router({
         .single();
 
       if (error) throw error;
-      return data;
+      return decryptNote(data);
     }),
 
   /** List recent notes */
@@ -253,7 +304,7 @@ export const sessionRouter = router({
 
       const { data, error } = await query;
       if (error) throw error;
-      return data;
+      return (data ?? []).map((note) => decryptNote(note));
     }),
 
   /** Delete a note */
