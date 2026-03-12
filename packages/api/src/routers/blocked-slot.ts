@@ -42,6 +42,19 @@ export const blockedSlotRouter = router({
         throw new TRPCError({ code: "CONFLICT", message: "This break overlaps with an existing session." });
       }
 
+      // Check for overlapping blocked slots
+      const { data: overlappingBlocks } = await ctx.supabase
+        .from("blocked_slots")
+        .select("id")
+        .eq("therapist_id", ctx.user.id)
+        .lt("start_at", input.end_at)
+        .gt("end_at", input.start_at)
+        .limit(1);
+
+      if (overlappingBlocks && overlappingBlocks.length > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "This break overlaps with another break." });
+      }
+
       const { data, error } = await ctx.supabase
         .from("blocked_slots")
         .insert({
