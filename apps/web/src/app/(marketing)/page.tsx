@@ -1,26 +1,26 @@
+import Navbar from "@/components/marketing/Navbar";
+import Hero from "@/components/marketing/Hero";
+import Problem from "@/components/marketing/Problem";
+import Features from "@/components/marketing/Features";
+import Privacy from "@/components/marketing/Privacy";
+import Pricing from "@/components/marketing/Pricing";
+import Testimonials from "@/components/marketing/Testimonials";
+import CtaSection from "@/components/marketing/CtaSection";
+import Footer from "@/components/marketing/Footer";
+import styles from "./marketing.module.css";
+
 export default function HomePage() {
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="text-center space-y-6 p-8">
-        <h1 className="text-5xl font-heading font-bold text-sage">Mano</h1>
-        <p className="text-xl text-ink-light max-w-md">
-          Privacy-first practice management for independent therapists in India.
-        </p>
-        <div className="flex gap-4 justify-center">
-          <a
-            href="/signup"
-            className="bg-sage text-white px-6 py-3 rounded-pill font-medium hover:bg-sage-500 transition-colors"
-          >
-            Get Started Free
-          </a>
-          <a
-            href="/login"
-            className="border border-sage text-sage px-6 py-3 rounded-pill font-medium hover:bg-sage-50 transition-colors"
-          >
-            Log In
-          </a>
-        </div>
-      </div>
-    </main>
+    <div className={styles.texture}>
+      <Navbar />
+      <Hero />
+      <Problem />
+      <Features />
+      <Privacy />
+      <Pricing />
+      <Testimonials />
+      <CtaSection />
+      <Footer />
+    </div>
   );
 }
