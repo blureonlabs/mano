@@ -6,6 +6,7 @@ import SessionSettings from "@/components/settings/SessionSettings";
 import AvailabilityEditor from "@/components/settings/AvailabilityEditor";
 import IntegrationCards from "@/components/settings/IntegrationCards";
 import BookingPageSection from "@/components/settings/BookingPageSection";
+import PoliciesForm from "@/components/settings/PoliciesForm";
 
 export default function SettingsPage() {
   const therapist = trpc.therapist.me.useQuery();
@@ -75,6 +76,14 @@ export default function SettingsPage() {
       <BookingPageSection
         slug={t.slug}
         bookingPageActive={t.booking_page_active}
+      />
+
+      <PoliciesForm
+        therapist={{
+          cancellation_policy: t.cancellation_policy,
+          late_policy: t.late_policy,
+          rescheduling_policy: t.rescheduling_policy,
+        }}
       />
 
       <IntegrationCards

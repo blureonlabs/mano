@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   AlertCircle,
   CircleDot,
+  FileText,
 } from "lucide-react";
 
 function formatTime(iso: string): string {
@@ -226,6 +227,12 @@ export default function TodayPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Link
+                      href={`/dashboard/notes/new?session_id=${session.id}`}
+                      className="px-3 py-1.5 rounded-lg bg-cream-100 text-ink-lighter text-xs font-medium hover:bg-cream-200 transition-colors flex items-center gap-1"
+                    >
+                      <FileText size={12} />
+                    </Link>
                     {session.zoom_join_url && (
                       <a
                         href={session.zoom_join_url}

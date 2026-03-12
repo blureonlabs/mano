@@ -7,6 +7,7 @@ import DatePicker from "./DatePicker";
 import SlotGrid from "./SlotGrid";
 import BookingForm from "./BookingForm";
 import BookingConfirmation from "./BookingConfirmation";
+import PolicyNotice from "./PolicyNotice";
 
 interface TimeSlot {
   start: string;
@@ -131,6 +132,12 @@ export default function BookingFlow({ slug }: { slug: string }) {
           avatarUrl={t.avatar_url}
           durationMins={t.session_duration_mins}
           rateInr={t.session_rate_inr}
+        />
+
+        <PolicyNotice
+          cancellationPolicy={t.cancellation_policy}
+          latePolicy={t.late_policy}
+          reschedulingPolicy={t.rescheduling_policy}
         />
 
         {step === "confirmed" ? (

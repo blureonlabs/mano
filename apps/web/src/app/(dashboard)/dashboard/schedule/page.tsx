@@ -1,6 +1,7 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
+import Link from "next/link";
 import {
   CalendarDays,
   Clock,
@@ -10,6 +11,7 @@ import {
   AlertCircle,
   IndianRupee,
   Mail,
+  FileText,
 } from "lucide-react";
 
 function formatDate(iso: string): string {
@@ -198,6 +200,13 @@ export default function SchedulePage() {
                                   Zoom
                                 </a>
                               )}
+                              <Link
+                                href={`/dashboard/notes/new?session_id=${session.id}`}
+                                className="px-3 py-1.5 rounded-lg bg-cream-100 text-ink-lighter text-xs font-medium hover:bg-cream-200 transition-colors flex items-center gap-1"
+                              >
+                                <FileText size={12} />
+                                Notes
+                              </Link>
                               <button
                                 onClick={() => complete.mutate({ session_id: session.id })}
                                 disabled={complete.isPending}

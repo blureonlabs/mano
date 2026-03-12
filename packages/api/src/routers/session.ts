@@ -215,4 +215,58 @@ export const sessionRouter = router({
       if (error && error.code !== "PGRST116") throw error; // PGRST116 = not found
       return data;
     }),
+
+  /** Get note by ID */
+  getNoteById: protectedProcedure
+    .input(z.object({ note_id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("session_notes")
+        .select("*, sessions(starts_at, ends_at, client_id, clients(full_name))")
+        .eq("id", input.note_id)
+        .eq("therapist_id", ctx.user.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    }),
+
+  /** List recent notes */
+  listNotes: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(20),
+        client_id: z.string().uuid().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      let query = ctx.supabase
+        .from("session_notes")
+        .select("*, sessions!inner(starts_at, ends_at, client_id, clients(full_name))")
+        .eq("therapist_id", ctx.user.id)
+        .order("created_at", { ascending: false })
+        .limit(input.limit);
+
+      if (input.client_id) {
+        query = query.eq("sessions.client_id", input.client_id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    }),
+
+  /** Delete a note */
+  deleteNote: protectedProcedure
+    .input(z.object({ note_id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { error } = await ctx.supabase
+        .from("session_notes")
+        .delete()
+        .eq("id", input.note_id)
+        .eq("therapist_id", ctx.user.id);
+
+      if (error) throw error;
+      return { success: true };
+    }),
 });

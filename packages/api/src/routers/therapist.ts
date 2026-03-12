@@ -69,7 +69,7 @@ export const therapistRouter = router({
       const { data, error } = await ctx.supabase
         .from("therapists")
         .select(
-          "id, full_name, display_name, slug, bio, qualifications, avatar_url, session_duration_mins, session_rate_inr, booking_page_active"
+          "id, full_name, display_name, slug, bio, qualifications, avatar_url, session_duration_mins, session_rate_inr, booking_page_active, cancellation_policy, late_policy, rescheduling_policy"
         )
         .eq("slug", input.slug)
         .eq("booking_page_active", true)

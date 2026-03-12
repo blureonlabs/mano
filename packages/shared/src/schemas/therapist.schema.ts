@@ -14,6 +14,9 @@ export const therapistSchema = z.object({
   buffer_mins: z.number().int().min(0).max(60).default(10),
   session_rate_inr: z.number().int().min(0).default(150000), // paise
   booking_page_active: z.boolean().default(true),
+  cancellation_policy: z.string().max(1000).nullable(),
+  late_policy: z.string().max(1000).nullable(),
+  rescheduling_policy: z.string().max(1000).nullable(),
   gstin: z.string().max(15).nullable(),
   google_connected: z.boolean().default(false),
   zoom_connected: z.boolean().default(false),
@@ -33,6 +36,9 @@ export const createTherapistSchema = therapistSchema.pick({
   buffer_mins: true,
   session_rate_inr: true,
   booking_page_active: true,
+  cancellation_policy: true,
+  late_policy: true,
+  rescheduling_policy: true,
 });
 
 export const updateTherapistSchema = createTherapistSchema.partial();

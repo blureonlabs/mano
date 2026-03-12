@@ -38,3 +38,30 @@ export const NOTE_TEMPLATES = {
 } as const;
 
 export type NoteTemplate = keyof typeof NOTE_TEMPLATES;
+
+export const COMMON_TECHNIQUES = [
+  "Cognitive Restructuring",
+  "Behavioral Activation",
+  "Exposure Therapy",
+  "Mindfulness",
+  "Relaxation Training",
+  "Psychoeducation",
+  "Motivational Interviewing",
+  "Journaling",
+  "Role Play",
+  "Guided Imagery",
+  "EMDR",
+  "Grounding Exercises",
+  "Socratic Questioning",
+  "Thought Records",
+  "Activity Scheduling",
+] as const;
+
+export const RISK_FLAGS = [
+  "Suicidal ideation",
+  "Self-harm",
+  "Substance abuse",
+  "Medication non-compliance",
+  "Deteriorating condition",
+  "Safety concern",
+] as const;
