@@ -77,7 +77,7 @@ export default function Hero() {
                 <div className={styles.demoDot} style={{ background: "#F5D5A8" }} />
                 <div className={styles.demoDot} style={{ background: "#A8D5A8" }} />
               </div>
-              <div className={styles.demoUrl}>vidhya.mano.app</div>
+              <div className={styles.demoUrl}>mano.app/vidya</div>
             </div>
             <div className={styles.demoBody}>
               <div className={styles.demoSidebar}>
@@ -91,7 +91,7 @@ export default function Hero() {
               <div className="flex flex-col gap-3.5">
                 <div>
                   <div className="font-heading text-lg font-medium text-ink mb-1">
-                    Good morning, Dr. Vidhya
+                    Good morning, Vidya
                   </div>
                   <div className="text-xs text-ink-lighter">
                     Tuesday, 10 March &middot; 3 sessions today

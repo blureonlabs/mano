@@ -5,7 +5,7 @@ const testimonials = [
   {
     quote:
       "I spend 2–3 hours every week on admin. Sending reminders, chasing payments, copying notes. This is the first tool that feels like it was actually built for someone like me.",
-    name: "Dr. Vidhya R.",
+    name: "Vidya",
     role: "Clinical Psychologist · Bangalore",
     initials: "V",
     avatarBg: "#D4E5E0",

@@ -119,13 +119,13 @@ function FeatureCard({
   delay: number;
 }) {
   return (
-    <FadeUp delay={delay}>
+    <FadeUp delay={delay} className="h-full">
       <div className={styles.featureCard}>
         <div className={styles.featureIconWrap}>{icon}</div>
         <div className="font-heading text-[19px] font-medium text-ink mb-2 tracking-tight">
           {title}
         </div>
-        <p className="text-sm font-light text-ink-light leading-relaxed">
+        <p className="text-sm font-light text-ink-light leading-relaxed flex-1">
           {desc}
         </p>
         <div className="flex flex-wrap gap-1.5 mt-4">
