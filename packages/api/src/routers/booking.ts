@@ -155,7 +155,7 @@ export const bookingRouter = router({
         // TODO: Call @mano/integrations GoogleCalendarClient.createEvent()
       }
 
-      // 7. Create session
+      // 7. Create session (pending approval — therapist must approve)
       const { data: session, error } = await ctx.supabase
         .from("sessions")
         .insert({
@@ -164,6 +164,7 @@ export const bookingRouter = router({
           starts_at: input.slot_start,
           ends_at: input.slot_end,
           duration_mins: therapist.session_duration_mins,
+          status: "pending_approval",
           zoom_meeting_id: zoomMeetingId,
           zoom_join_url: zoomJoinUrl,
           zoom_start_url: zoomStartUrl,

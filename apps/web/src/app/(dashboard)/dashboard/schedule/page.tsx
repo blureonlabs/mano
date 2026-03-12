@@ -31,6 +31,7 @@ function dateKey(iso: string): string {
 
 export default function SchedulePage() {
   const upcoming = trpc.session.upcoming.useQuery({ limit: 30 });
+  const pending = trpc.session.pending.useQuery();
   const utils = trpc.useUtils();
 
   const cancel = trpc.session.cancel.useMutation({
@@ -47,6 +48,20 @@ export default function SchedulePage() {
     },
   });
 
+  const approve = trpc.session.approve.useMutation({
+    onSuccess: () => {
+      utils.session.pending.invalidate();
+      utils.session.upcoming.invalidate();
+      utils.session.today.invalidate();
+    },
+  });
+
+  const reject = trpc.session.reject.useMutation({
+    onSuccess: () => {
+      utils.session.pending.invalidate();
+    },
+  });
+
   if (upcoming.isLoading) {
     return (
       <div className="max-w-3xl space-y-6">
@@ -58,22 +73,32 @@ export default function SchedulePage() {
     );
   }
 
+  // Merge pending + upcoming, sort by starts_at
+  const allSessions = [
+    ...(pending.data ?? []),
+    ...(upcoming.data ?? []),
+  ].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+
   // Group sessions by date
-  const grouped: Record<string, typeof upcoming.data> = {};
-  upcoming.data?.forEach((session) => {
+  const grouped: Record<string, typeof allSessions> = {};
+  allSessions.forEach((session) => {
     const key = dateKey(session.starts_at);
     if (!grouped[key]) grouped[key] = [];
     grouped[key]!.push(session);
   });
 
   const dateGroups = Object.entries(grouped);
+  const pendingCount = pending.data?.length ?? 0;
 
   return (
     <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold text-ink">Schedule</h1>
         <p className="text-sm text-ink-lighter mt-0.5">
-          {upcoming.data?.length ?? 0} upcoming session{(upcoming.data?.length ?? 0) !== 1 ? "s" : ""}
+          {allSessions.length} session{allSessions.length !== 1 ? "s" : ""}
+          {pendingCount > 0 && (
+            <span className="text-amber font-medium"> ({pendingCount} pending approval)</span>
+          )}
         </p>
       </div>
 
@@ -127,49 +152,82 @@ export default function SchedulePage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {session.zoom_join_url && (
-                            <a
-                              href={session.zoom_join_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 transition-colors"
-                            >
-                              Zoom
-                            </a>
+                          {session.status === "pending_approval" ? (
+                            <>
+                              <button
+                                onClick={() => approve.mutate({ session_id: session.id })}
+                                disabled={approve.isPending}
+                                className="px-3.5 py-1.5 rounded-lg bg-sage text-white text-xs font-semibold hover:bg-sage-500 transition-colors shadow-sm"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm("Decline this booking request?")) {
+                                    reject.mutate({ session_id: session.id });
+                                  }
+                                }}
+                                disabled={reject.isPending}
+                                className="px-3 py-1.5 rounded-lg bg-white border border-cream-300 text-ink-lighter text-xs font-medium hover:text-red-600 hover:border-red-200 transition-colors"
+                              >
+                                Decline
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {session.zoom_join_url && (
+                                <a
+                                  href={session.zoom_join_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 transition-colors"
+                                >
+                                  Zoom
+                                </a>
+                              )}
+                              <button
+                                onClick={() => complete.mutate({ session_id: session.id })}
+                                disabled={complete.isPending}
+                                className="px-3 py-1.5 rounded-lg bg-sage-50 text-sage text-xs font-medium hover:bg-sage-100 transition-colors"
+                              >
+                                Done
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm("Cancel this session?")) {
+                                    cancel.mutate({ session_id: session.id });
+                                  }
+                                }}
+                                disabled={cancel.isPending}
+                                className="px-3 py-1.5 rounded-lg bg-cream-100 text-ink-lighter text-xs font-medium hover:bg-red-50 hover:text-red-600 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </>
                           )}
-                          <button
-                            onClick={() => complete.mutate({ session_id: session.id })}
-                            disabled={complete.isPending}
-                            className="px-3 py-1.5 rounded-lg bg-sage-50 text-sage text-xs font-medium hover:bg-sage-100 transition-colors"
-                          >
-                            Done
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm("Cancel this session?")) {
-                                cancel.mutate({ session_id: session.id });
-                              }
-                            }}
-                            disabled={cancel.isPending}
-                            className="px-3 py-1.5 rounded-lg bg-cream-100 text-ink-lighter text-xs font-medium hover:bg-red-50 hover:text-red-600 transition-colors"
-                          >
-                            Cancel
-                          </button>
                         </div>
                       </div>
 
-                      {/* Payment status */}
+                      {/* Status badges */}
                       <div className="mt-2 ml-14 flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-[11px] font-medium ${
-                          session.payment_status === "paid"
-                            ? "bg-sage-50 text-sage"
-                            : "bg-amber-50 text-amber"
-                        }`}>
-                          <span className={`w-1 h-1 rounded-full ${
-                            session.payment_status === "paid" ? "bg-sage" : "bg-amber"
-                          }`} />
-                          {session.payment_status === "paid" ? "Paid" : "Payment pending"}
-                        </span>
+                        {session.status === "pending_approval" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-[11px] font-medium bg-amber-50 text-amber">
+                            <span className="w-1 h-1 rounded-full bg-amber animate-pulse" />
+                            Awaiting approval
+                          </span>
+                        )}
+                        {session.status === "scheduled" && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-[11px] font-medium ${
+                            session.payment_status === "paid"
+                              ? "bg-sage-50 text-sage"
+                              : "bg-amber-50 text-amber"
+                          }`}>
+                            <span className={`w-1 h-1 rounded-full ${
+                              session.payment_status === "paid" ? "bg-sage" : "bg-amber"
+                            }`} />
+                            {session.payment_status === "paid" ? "Paid" : "Payment pending"}
+                          </span>
+                        )}
                         {client?.email && (
                           <span className="text-[11px] text-ink-lighter">{client.email}</span>
                         )}

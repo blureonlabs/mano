@@ -24,10 +24,26 @@ function formatDate(iso: string): string {
 export default function TodayPage() {
   const today = trpc.session.today.useQuery();
   const upcoming = trpc.session.upcoming.useQuery({ limit: 5 });
+  const pending = trpc.session.pending.useQuery();
   const clients = trpc.clients.list.useQuery();
   const therapist = trpc.therapist.me.useQuery();
+  const utils = trpc.useUtils();
+
+  const approve = trpc.session.approve.useMutation({
+    onSuccess: () => {
+      utils.session.pending.invalidate();
+      utils.session.today.invalidate();
+      utils.session.upcoming.invalidate();
+    },
+  });
+  const reject = trpc.session.reject.useMutation({
+    onSuccess: () => {
+      utils.session.pending.invalidate();
+    },
+  });
 
   const todayCount = today.data?.length ?? 0;
+  const pendingCount = pending.data?.length ?? 0;
   const clientCount = clients.data?.length ?? 0;
   const greeting = getGreeting();
 
@@ -65,6 +81,62 @@ export default function TodayPage() {
             : `You have ${todayCount} session${todayCount !== 1 ? "s" : ""} today.`}
         </p>
       </div>
+
+      {/* Pending Requests */}
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-amber-200 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber animate-pulse" />
+            <h2 className="text-sm font-semibold text-amber-600">
+              {pendingCount} Pending Request{pendingCount !== 1 ? "s" : ""}
+            </h2>
+          </div>
+          <div className="divide-y divide-amber-200">
+            {pending.data?.map((session) => {
+              const client = session.clients as { full_name: string; email: string | null; phone: string | null } | null;
+              return (
+                <div key={session.id} className="px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-semibold text-amber-600">
+                        {client?.full_name?.charAt(0)?.toUpperCase() ?? "?"}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-ink">
+                        {client?.full_name ?? "Unknown"}
+                      </div>
+                      <div className="text-xs text-ink-lighter">
+                        {formatDate(session.starts_at)} &middot; {formatTime(session.starts_at)} &ndash; {formatTime(session.ends_at)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => approve.mutate({ session_id: session.id })}
+                      disabled={approve.isPending}
+                      className="px-3.5 py-1.5 rounded-lg bg-sage text-white text-xs font-semibold hover:bg-sage-500 transition-colors shadow-sm"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm("Decline this booking request?")) {
+                          reject.mutate({ session_id: session.id });
+                        }
+                      }}
+                      disabled={reject.isPending}
+                      className="px-3.5 py-1.5 rounded-lg bg-white border border-cream-300 text-ink-lighter text-xs font-medium hover:text-red-600 hover:border-red-200 transition-colors"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

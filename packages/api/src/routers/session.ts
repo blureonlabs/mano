@@ -7,6 +7,68 @@ import {
 import { z } from "zod";
 
 export const sessionRouter = router({
+  /** Get sessions pending therapist approval */
+  pending: protectedProcedure.query(async ({ ctx }) => {
+    const { data, error } = await ctx.supabase
+      .from("sessions")
+      .select("*, clients(full_name, email, phone)")
+      .eq("therapist_id", ctx.user.id)
+      .eq("status", "pending_approval")
+      .order("created_at");
+
+    if (error) throw error;
+    return data;
+  }),
+
+  /** Approve a pending booking request */
+  approve: protectedProcedure
+    .input(z.object({ session_id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("sessions")
+        .update({
+          status: "scheduled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id)
+        .eq("status", "pending_approval")
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // TODO: Send confirmation email/WhatsApp to client
+      return data;
+    }),
+
+  /** Reject a pending booking request */
+  reject: protectedProcedure
+    .input(z.object({
+      session_id: z.string().uuid(),
+      reason: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from("sessions")
+        .update({
+          status: "cancelled",
+          cancellation_reason: input.reason ?? "Booking request declined",
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.session_id)
+        .eq("therapist_id", ctx.user.id)
+        .eq("status", "pending_approval")
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // TODO: Send rejection notification to client
+      return data;
+    }),
+
   /** Get today's sessions for the therapist */
   today: protectedProcedure.query(async ({ ctx }) => {
     const startOfDay = new Date();
