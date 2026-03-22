@@ -4,6 +4,7 @@ interface BookingConfirmationProps {
   slotEnd: string;
   durationMins: number;
   zoomJoinUrl: string | null;
+  intakeAccessToken?: string | null;
 }
 
 function formatDateTime(iso: string): string {
@@ -31,6 +32,7 @@ export default function BookingConfirmation({
   slotStart,
   slotEnd,
   durationMins,
+  intakeAccessToken,
 }: BookingConfirmationProps) {
   return (
     <div className="text-center space-y-6 py-4">
@@ -96,6 +98,29 @@ export default function BookingConfirmation({
           </div>
         </div>
       </div>
+
+      {/* Intake form CTA */}
+      {intakeAccessToken && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 text-left space-y-2">
+          <p className="text-sm font-semibold text-amber-800">Intake Form Required</p>
+          <p className="text-xs text-amber-700">
+            Please fill out the intake form before your session. This helps your therapist prepare for your appointment.
+          </p>
+          <a
+            href={`/intake/${intakeAccessToken}`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber text-white text-sm font-semibold hover:bg-amber-600 transition-colors shadow-sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            Fill Intake Form
+          </a>
+        </div>
+      )}
 
       {/* What happens next */}
       <div className="bg-sage-50/50 border border-sage-100 rounded-xl px-4 py-3 text-left">

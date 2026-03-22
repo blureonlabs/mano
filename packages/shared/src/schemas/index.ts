@@ -1,3 +1,4 @@
+export * from "./pagination.schema";
 export * from "./therapist.schema";
 export * from "./client.schema";
 export * from "./session.schema";
@@ -7,3 +8,9 @@ export * from "./message.schema";
 export * from "./treatment-plan.schema";
 export * from "./resource.schema";
 export * from "./blocked-slot.schema";
+export * from "./recurring-reservation.schema";
+export * from "./practice.schema";
+export * from "./broadcast.schema";
+export * from "./intake-form.schema";
+export * from "./client-auth.schema";
+export * from "./invitation.schema";

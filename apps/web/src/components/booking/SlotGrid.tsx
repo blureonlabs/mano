@@ -6,7 +6,10 @@ interface TimeSlot {
 interface SlotGridProps {
   slots: TimeSlot[];
   selectedSlot: TimeSlot | null;
+  selectedSlots?: TimeSlot[];
   onSelect: (slot: TimeSlot) => void;
+  multiSelect?: boolean;
+  onContinueMulti?: () => void;
   loading: boolean;
 }
 
@@ -21,7 +24,6 @@ function formatTime(iso: string): string {
 
 function getHour(iso: string): number {
   const d = new Date(iso);
-  // Convert to IST
   const ist = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   return ist.getHours();
 }
@@ -29,7 +31,10 @@ function getHour(iso: string): number {
 export default function SlotGrid({
   slots,
   selectedSlot,
+  selectedSlots = [],
   onSelect,
+  multiSelect = false,
+  onContinueMulti,
   loading,
 }: SlotGridProps) {
   if (loading) {
@@ -40,10 +45,7 @@ export default function SlotGrid({
         </h3>
         <div className="grid grid-cols-3 gap-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-11 bg-cream-200 rounded-xl animate-pulse"
-            />
+            <div key={i} className="h-11 bg-cream-200 rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -64,12 +66,8 @@ export default function SlotGrid({
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <p className="text-ink-lighter text-sm">
-            No available slots on this day
-          </p>
-          <p className="text-ink-lighter/60 text-xs mt-1">
-            Try selecting a different date
-          </p>
+          <p className="text-ink-lighter text-sm">No available slots on this day</p>
+          <p className="text-ink-lighter/60 text-xs mt-1">Try selecting a different date</p>
         </div>
       </div>
     );
@@ -84,10 +82,17 @@ export default function SlotGrid({
   const evening = slots.filter((s) => getHour(s.start) >= 17);
 
   const groups = [
-    { label: "Morning", icon: "M", slots: morning },
-    { label: "Afternoon", icon: "A", slots: afternoon },
-    { label: "Evening", icon: "E", slots: evening },
+    { label: "Morning", slots: morning },
+    { label: "Afternoon", slots: afternoon },
+    { label: "Evening", slots: evening },
   ].filter((g) => g.slots.length > 0);
+
+  function isSlotSelected(slot: TimeSlot): boolean {
+    if (multiSelect) {
+      return selectedSlots.some((s) => s.start === slot.start && s.end === slot.end);
+    }
+    return selectedSlot?.start === slot.start && selectedSlot?.end === slot.end;
+  }
 
   return (
     <div className="space-y-4">
@@ -95,9 +100,16 @@ export default function SlotGrid({
         <h3 className="text-xs font-semibold text-ink-lighter uppercase tracking-wider">
           Available times
         </h3>
-        <span className="text-xs text-ink-lighter">
-          {slots.length} slot{slots.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          {multiSelect && selectedSlots.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill bg-sage-50 text-sage text-[11px] font-medium">
+              {selectedSlots.length} selected
+            </span>
+          )}
+          <span className="text-xs text-ink-lighter">
+            {slots.length} slot{slots.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {groups.map((group) => (
@@ -124,16 +136,13 @@ export default function SlotGrid({
           </div>
           <div className="grid grid-cols-3 gap-2">
             {group.slots.map((slot) => {
-              const isSelected =
-                selectedSlot?.start === slot.start &&
-                selectedSlot?.end === slot.end;
-
+              const selected = isSlotSelected(slot);
               return (
                 <button
                   key={slot.start}
                   onClick={() => onSelect(slot)}
                   className={`py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isSelected
+                    selected
                       ? "bg-sage text-white shadow-md shadow-sage/20"
                       : "bg-white border border-cream-300 text-ink hover:border-sage-300 hover:text-sage hover:shadow-sm"
                   }`}
@@ -145,6 +154,16 @@ export default function SlotGrid({
           </div>
         </div>
       ))}
+
+      {/* Continue button for multi-select */}
+      {multiSelect && selectedSlots.length > 0 && onContinueMulti && (
+        <button
+          onClick={onContinueMulti}
+          className="w-full bg-sage text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-sage-500 transition-all shadow-md shadow-sage/20"
+        >
+          Continue with {selectedSlots.length} slot{selectedSlots.length !== 1 ? "s" : ""}
+        </button>
+      )}
     </div>
   );
 }

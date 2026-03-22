@@ -1,5 +1,6 @@
 import { router, protectedProcedure } from "../trpc";
 import { createResourceSchema, updateResourceSchema, shareResourceSchema } from "@mano/shared";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 export const resourceRouter = router({
@@ -22,7 +23,7 @@ export const resourceRouter = router({
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch resources" });
       return data;
     }),
 
@@ -37,7 +38,7 @@ export const resourceRouter = router({
         .eq("therapist_id", ctx.user.id)
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch resource" });
       return data;
     }),
 
@@ -51,7 +52,7 @@ export const resourceRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create resource" });
       return data;
     }),
 
@@ -70,21 +71,21 @@ export const resourceRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update resource" });
       return data;
     }),
 
-  /** Delete a resource */
+  /** Soft-delete a resource (sets deleted_at, RLS hides from future reads) */
   delete: protectedProcedure
     .input(z.object({ resource_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { error } = await ctx.supabase
         .from("resources")
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq("id", input.resource_id)
         .eq("therapist_id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete resource" });
       return { success: true };
     }),
 
@@ -103,7 +104,7 @@ export const resourceRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to share resource" });
       return data;
     }),
 
@@ -121,7 +122,7 @@ export const resourceRouter = router({
         .eq("client_id", input.client_id)
         .eq("therapist_id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to unshare resource" });
       return { success: true };
     }),
 
@@ -136,7 +137,7 @@ export const resourceRouter = router({
         .eq("therapist_id", ctx.user.id)
         .order("shared_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch shared resources" });
       return data;
     }),
 });

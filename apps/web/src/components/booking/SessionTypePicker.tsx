@@ -1,16 +1,51 @@
 import { Clock } from "lucide-react";
 
+interface SessionTypeRate {
+  client_category: string;
+  rate_inr: number;
+}
+
 interface SessionTypeOption {
   id: string;
   name: string;
   duration_mins: number;
   rate_inr: number;
   description: string | null;
+  session_type_rates?: SessionTypeRate[];
 }
 
 interface SessionTypePickerProps {
   sessionTypes: SessionTypeOption[];
   onSelect: (sessionType: SessionTypeOption) => void;
+}
+
+/** Format rate in paise to display string */
+function formatRate(paise: number): string {
+  if (paise === 0) return "Free";
+  return `₹${(paise / 100).toLocaleString("en-IN")}`;
+}
+
+/** Get display price — shows "from ₹X" if there are multiple tiers with different rates */
+function getPriceLabel(type: SessionTypeOption): { text: string; isFree: boolean } {
+  const rates = type.session_type_rates ?? [];
+  if (rates.length === 0) {
+    return { text: formatRate(type.rate_inr), isFree: type.rate_inr === 0 };
+  }
+
+  // Collect all distinct rates (default + category-specific)
+  const allRates = [type.rate_inr, ...rates.map((r) => r.rate_inr)];
+  const minRate = Math.min(...allRates);
+  const maxRate = Math.max(...allRates);
+
+  if (minRate === maxRate) {
+    return { text: formatRate(minRate), isFree: minRate === 0 };
+  }
+
+  // Multiple tiers — show "from ₹X"
+  if (minRate === 0) {
+    return { text: `From Free`, isFree: true };
+  }
+  return { text: `From ${formatRate(minRate)}`, isFree: false };
 }
 
 export default function SessionTypePicker({ sessionTypes, onSelect }: SessionTypePickerProps) {
@@ -41,13 +76,18 @@ export default function SessionTypePicker({ sessionTypes, onSelect }: SessionTyp
                   <Clock size={10} />
                   {type.duration_mins} min
                 </span>
-                <span className={`px-2 py-0.5 rounded-pill text-xs font-medium ${
-                  type.rate_inr === 0
-                    ? "bg-sage-50 text-sage"
-                    : "bg-cream-100 text-ink-light"
-                }`}>
-                  {type.rate_inr === 0 ? "Free" : `₹${(type.rate_inr / 100).toLocaleString("en-IN")}`}
-                </span>
+                {(() => {
+                  const price = getPriceLabel(type);
+                  return (
+                    <span className={`px-2 py-0.5 rounded-pill text-xs font-medium ${
+                      price.isFree
+                        ? "bg-sage-50 text-sage"
+                        : "bg-cream-100 text-ink-light"
+                    }`}>
+                      {price.text}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
             {type.description && (

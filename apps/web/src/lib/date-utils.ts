@@ -158,3 +158,51 @@ export function makeISTDateTime(date: Date, hours: number, minutes: number = 0):
   const mm = String(minutes).padStart(2, "0");
   return new Date(`${dateStr}T${hh}:${mm}:00+05:30`).toISOString();
 }
+
+/** Get the first day of the month containing the given date (in IST) */
+export function getFirstOfMonth(date: Date): Date {
+  const dateStr = toISTDateString(date);
+  const [year, month] = dateStr.split("-");
+  return new Date(`${year}-${month}-01T00:00:00+05:30`);
+}
+
+/** Get end of month (last day 23:59:59 IST) as ISO string */
+export function endOfMonthIST(date: Date): string {
+  const dateStr = toISTDateString(date);
+  const [yearStr, monthStr] = dateStr.split("-");
+  const year = parseInt(yearStr!, 10);
+  const month = parseInt(monthStr!, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  return new Date(`${yearStr}-${monthStr}-${String(lastDay).padStart(2, "0")}T23:59:59.999+05:30`).toISOString();
+}
+
+/**
+ * Get 42 Date objects (6 rows x 7 cols) for a month grid.
+ * Starts from the Monday of the week containing the 1st of the month.
+ */
+export function getMonthGrid(date: Date): Date[] {
+  const first = getFirstOfMonth(date);
+  const startMonday = getMonday(first);
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(startMonday);
+    d.setDate(startMonday.getDate() + i);
+    return d;
+  });
+}
+
+/** Format month + year: "March 2026" */
+export function formatMonthYear(date: Date): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "long",
+    year: "numeric",
+    timeZone: IST,
+  }).format(date);
+}
+
+/** Get IST month (1-12) from a Date */
+export function getISTMonth(date: Date): number {
+  return parseInt(
+    date.toLocaleString("en-US", { timeZone: IST, month: "numeric" }),
+    10
+  );
+}

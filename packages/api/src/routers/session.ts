@@ -1,62 +1,16 @@
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, practiceProcedure, clinicalProcedure } from "../trpc";
 import {
   createSessionNoteSchema,
   updateSessionNoteSchema,
   cancelSessionSchema,
+  paginationSchema,
 } from "@mano/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { encrypt, decrypt } from "../utils/encryption";
-
-/** Fields in session_notes that contain clinical data and must be encrypted at rest */
-const ENCRYPTED_NOTE_FIELDS = [
-  "subjective",
-  "objective",
-  "assessment",
-  "plan",
-  "freeform_content",
-  "homework",
-] as const;
-
-function encryptNoteInput(input: Record<string, unknown>): Record<string, unknown> {
-  const result = { ...input };
-  for (const field of ENCRYPTED_NOTE_FIELDS) {
-    if (field in result && result[field] != null && typeof result[field] === "string") {
-      result[field] = encrypt(result[field] as string);
-    }
-  }
-  // Encrypt array fields as JSON strings
-  if (result.techniques_used != null) {
-    result.techniques_used = encrypt(JSON.stringify(result.techniques_used));
-  }
-  if (result.risk_flags != null) {
-    result.risk_flags = encrypt(JSON.stringify(result.risk_flags));
-  }
-  return result;
-}
-
-function decryptNote<T extends Record<string, unknown>>(note: T): T {
-  const result = { ...note };
-  for (const field of ENCRYPTED_NOTE_FIELDS) {
-    if (field in result && result[field] != null && typeof result[field] === "string") {
-      try {
-        (result as Record<string, unknown>)[field] = decrypt(result[field] as string);
-      } catch { /* leave as-is if not encrypted (legacy data) */ }
-    }
-  }
-  // Decrypt array fields back from encrypted JSON strings
-  if (result.techniques_used != null && typeof result.techniques_used === "string") {
-    try {
-      (result as Record<string, unknown>).techniques_used = JSON.parse(decrypt(result.techniques_used as string) ?? "[]");
-    } catch { /* leave as-is if not encrypted (legacy data) */ }
-  }
-  if (result.risk_flags != null && typeof result.risk_flags === "string") {
-    try {
-      (result as Record<string, unknown>).risk_flags = JSON.parse(decrypt(result.risk_flags as string) ?? "[]");
-    } catch { /* leave as-is if not encrypted (legacy data) */ }
-  }
-  return result;
-}
+import { handleSessionIntegrations } from "../utils/integration-helpers";
+import { logAudit } from "../utils/audit";
+import { clinicalData } from "../utils/clinical";
+import { getAccessibleTherapistIds, applyTherapistScope } from "../utils/practice-scope";
 
 export const sessionRouter = router({
   /** Get sessions pending therapist approval */
@@ -68,7 +22,7 @@ export const sessionRouter = router({
       .eq("status", "pending_approval")
       .order("created_at");
 
-    if (error) throw error;
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch pending sessions" });
     return data;
   }),
 
@@ -76,10 +30,10 @@ export const sessionRouter = router({
   approve: protectedProcedure
     .input(z.object({ session_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      // First fetch the session to get its time range
+      // Fetch the session with client details for overlap check + integrations
       const { data: session } = await ctx.supabase
         .from("sessions")
-        .select("starts_at, ends_at")
+        .select("starts_at, ends_at, duration_mins, session_type_name, client_id, clients(full_name, email)")
         .eq("id", input.session_id)
         .eq("therapist_id", ctx.user.id)
         .eq("status", "pending_approval")
@@ -87,19 +41,18 @@ export const sessionRouter = router({
 
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found or already processed." });
 
-      // Check for overlapping scheduled sessions (exclude this one)
-      const { data: overlapping } = await ctx.supabase
+      // Check for overlapping scheduled sessions (exclude this one) — head:true avoids transferring row data
+      const { count: overlapCount } = await ctx.supabase
         .from("sessions")
-        .select("id")
+        .select("*", { count: "exact", head: true })
         .eq("therapist_id", ctx.user.id)
         .neq("id", input.session_id)
         .neq("status", "cancelled")
         .neq("status", "pending_approval")
         .lt("starts_at", session.ends_at)
-        .gt("ends_at", session.starts_at)
-        .limit(1);
+        .gt("ends_at", session.starts_at);
 
-      if (overlapping && overlapping.length > 0) {
+      if (overlapCount && overlapCount > 0) {
         throw new TRPCError({ code: "CONFLICT", message: "Cannot approve — this time slot now conflicts with another session." });
       }
 
@@ -115,10 +68,50 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to approve session" });
 
-      // TODO: Send confirmation email/WhatsApp to client
-      return data;
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "update",
+        entity_type: "session",
+        entity_id: input.session_id,
+        changes: { status: "scheduled" },
+      });
+
+      // Wire integrations: Zoom meeting, Google Calendar event, confirmation email.
+      // Best-effort — failures here do not block the approval.
+      const clientData = session.clients as unknown;
+      // Supabase returns joined rows as an array or object depending on the relation
+      const client = Array.isArray(clientData)
+        ? (clientData[0] as { full_name: string; email: string | null } | undefined) ?? null
+        : (clientData as { full_name: string; email: string | null } | null);
+      const durationMins = session.duration_mins ?? Math.round(
+        (new Date(session.ends_at).getTime() - new Date(session.starts_at).getTime()) / 60000
+      );
+
+      try {
+        const integrationResult = await handleSessionIntegrations(ctx.supabase, {
+          sessionId: input.session_id,
+          therapistId: ctx.user.id,
+          clientName: client?.full_name ?? "Client",
+          clientEmail: client?.email,
+          sessionType: session.session_type_name ?? "Therapy Session",
+          startsAt: session.starts_at,
+          endsAt: session.ends_at,
+          durationMins,
+        });
+
+        return {
+          ...data,
+          zoom_join_url: integrationResult.zoomJoinUrl ?? data.zoom_join_url ?? null,
+          zoom_meeting_id: integrationResult.zoomMeetingId ?? data.zoom_meeting_id ?? null,
+          google_event_id: integrationResult.googleEventId ?? data.google_event_id ?? null,
+        };
+      } catch {
+        // Integration failure should never block the approval
+        return data;
+      }
     }),
 
   /** Reject a pending booking request */
@@ -142,65 +135,89 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to reject session" });
 
       // TODO: Send rejection notification to client
       return data;
     }),
 
-  /** Get today's sessions for the therapist */
-  today: protectedProcedure.query(async ({ ctx }) => {
+  /** Get today's sessions for the therapist / practice */
+  today: practiceProcedure.query(async ({ ctx }) => {
+    const therapistIds = await getAccessibleTherapistIds(
+      ctx.supabase,
+      ctx.user.id,
+      ctx.practice
+    );
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const { data, error } = await ctx.supabase
+    let query = ctx.supabase
       .from("sessions")
       .select("*, clients(full_name, email, phone)")
-      .eq("therapist_id", ctx.user.id)
       .gte("starts_at", startOfDay.toISOString())
       .lte("starts_at", endOfDay.toISOString())
       .neq("status", "cancelled")
       .order("starts_at");
 
-    if (error) throw error;
+    query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
+
+    const { data, error } = await query;
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch today's sessions" });
     return data;
   }),
 
   /** Get upcoming sessions */
-  upcoming: protectedProcedure
+  upcoming: practiceProcedure
     .input(z.object({ limit: z.number().min(1).max(50).default(10) }))
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const therapistIds = await getAccessibleTherapistIds(
+        ctx.supabase,
+        ctx.user.id,
+        ctx.practice
+      );
+
+      let query = ctx.supabase
         .from("sessions")
         .select("*, clients(full_name, email, phone)")
-        .eq("therapist_id", ctx.user.id)
         .eq("status", "scheduled")
         .gte("starts_at", new Date().toISOString())
         .order("starts_at")
         .limit(input.limit);
 
-      if (error) throw error;
+      query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
+
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch upcoming sessions" });
       return data;
     }),
 
   /** Get all sessions within a date range (for calendar view) */
-  listByDateRange: protectedProcedure
+  listByDateRange: practiceProcedure
     .input(z.object({
       from: z.string().datetime(),
       to: z.string().datetime(),
     }))
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const therapistIds = await getAccessibleTherapistIds(
+        ctx.supabase,
+        ctx.user.id,
+        ctx.practice
+      );
+
+      let query = ctx.supabase
         .from("sessions")
         .select("*, clients(full_name, email, phone)")
-        .eq("therapist_id", ctx.user.id)
         .gte("starts_at", input.from)
         .lte("starts_at", input.to)
         .order("starts_at");
 
-      if (error) throw error;
+      query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
+
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch sessions by date range" });
       return data;
     }),
 
@@ -214,40 +231,46 @@ export const sessionRouter = router({
       notes: z.string().max(500).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Check for overlapping sessions (not cancelled)
-      const { data: overlapping } = await ctx.supabase
-        .from("sessions")
-        .select("id, starts_at, ends_at")
-        .eq("therapist_id", ctx.user.id)
-        .neq("status", "cancelled")
-        .lt("starts_at", input.ends_at)
-        .gt("ends_at", input.starts_at)
-        .limit(1);
+      // Run all pre-checks in parallel: session overlap, block overlap, therapist config, session count
+      const [sessionOverlapRes, blockOverlapRes, therapistRes, countRes] = await Promise.all([
+        // 1. Check for overlapping sessions (head:true = no row data)
+        ctx.supabase
+          .from("sessions")
+          .select("*", { count: "exact", head: true })
+          .eq("therapist_id", ctx.user.id)
+          .neq("status", "cancelled")
+          .lt("starts_at", input.ends_at)
+          .gt("ends_at", input.starts_at),
+        // 2. Check for overlapping blocked slots
+        ctx.supabase
+          .from("blocked_slots")
+          .select("*", { count: "exact", head: true })
+          .eq("therapist_id", ctx.user.id)
+          .lt("start_at", input.ends_at)
+          .gt("end_at", input.starts_at),
+        // 3. Resolve session type for duration/rate
+        ctx.supabase
+          .from("therapists")
+          .select("session_duration_mins, session_rate_inr, session_types")
+          .eq("id", ctx.user.id)
+          .single(),
+        // 4. Get session number for this client
+        ctx.supabase
+          .from("sessions")
+          .select("*", { count: "exact", head: true })
+          .eq("client_id", input.client_id)
+          .eq("therapist_id", ctx.user.id),
+      ]);
 
-      if (overlapping && overlapping.length > 0) {
+      if (sessionOverlapRes.count && sessionOverlapRes.count > 0) {
         throw new TRPCError({ code: "CONFLICT", message: "This time slot overlaps with an existing session." });
       }
 
-      // Check for overlapping blocked slots
-      const { data: overlappingBlocks } = await ctx.supabase
-        .from("blocked_slots")
-        .select("id")
-        .eq("therapist_id", ctx.user.id)
-        .lt("start_at", input.ends_at)
-        .gt("end_at", input.starts_at)
-        .limit(1);
-
-      if (overlappingBlocks && overlappingBlocks.length > 0) {
+      if (blockOverlapRes.count && blockOverlapRes.count > 0) {
         throw new TRPCError({ code: "CONFLICT", message: "This time slot overlaps with a blocked break." });
       }
 
-      // Resolve session type for duration/rate
-      const { data: therapist } = await ctx.supabase
-        .from("therapists")
-        .select("session_duration_mins, session_rate_inr, session_types")
-        .eq("id", ctx.user.id)
-        .single();
-
+      const therapist = therapistRes.data;
       const sessionTypes = (therapist?.session_types ?? []) as {
         id: string; name: string; duration_mins: number; rate_inr: number;
       }[];
@@ -261,12 +284,7 @@ export const sessionRouter = router({
       const rateInr = selectedType?.rate_inr ?? therapist?.session_rate_inr ?? 0;
       const typeName = selectedType?.name ?? null;
 
-      // Get session number for this client
-      const { count } = await ctx.supabase
-        .from("sessions")
-        .select("*", { count: "exact", head: true })
-        .eq("client_id", input.client_id)
-        .eq("therapist_id", ctx.user.id);
+      const count = countRes.count;
 
       // Insert as "scheduled" directly (therapist-created = auto-approved)
       const { data, error } = await ctx.supabase
@@ -286,7 +304,7 @@ export const sessionRouter = router({
         .select("*, clients(full_name, email, phone)")
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create session" });
       return data;
     }),
 
@@ -311,31 +329,29 @@ export const sessionRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot reschedule a session that is already completed, cancelled, or no-show." });
       }
 
-      // Check for overlapping sessions (exclude this one)
-      const { data: overlapping } = await ctx.supabase
-        .from("sessions")
-        .select("id")
-        .eq("therapist_id", ctx.user.id)
-        .neq("id", input.session_id)
-        .neq("status", "cancelled")
-        .lt("starts_at", input.ends_at)
-        .gt("ends_at", input.starts_at)
-        .limit(1);
+      // Check for overlapping sessions and blocked slots in parallel (head:true = no row data)
+      const [sessionOverlapRes, blockOverlapRes] = await Promise.all([
+        ctx.supabase
+          .from("sessions")
+          .select("*", { count: "exact", head: true })
+          .eq("therapist_id", ctx.user.id)
+          .neq("id", input.session_id)
+          .neq("status", "cancelled")
+          .lt("starts_at", input.ends_at)
+          .gt("ends_at", input.starts_at),
+        ctx.supabase
+          .from("blocked_slots")
+          .select("*", { count: "exact", head: true })
+          .eq("therapist_id", ctx.user.id)
+          .lt("start_at", input.ends_at)
+          .gt("end_at", input.starts_at),
+      ]);
 
-      if (overlapping && overlapping.length > 0) {
+      if (sessionOverlapRes.count && sessionOverlapRes.count > 0) {
         throw new TRPCError({ code: "CONFLICT", message: "New time overlaps with an existing session." });
       }
 
-      // Check for overlapping blocked slots
-      const { data: overlappingBlocks } = await ctx.supabase
-        .from("blocked_slots")
-        .select("id")
-        .eq("therapist_id", ctx.user.id)
-        .lt("start_at", input.ends_at)
-        .gt("end_at", input.starts_at)
-        .limit(1);
-
-      if (overlappingBlocks && overlappingBlocks.length > 0) {
+      if (blockOverlapRes.count && blockOverlapRes.count > 0) {
         throw new TRPCError({ code: "CONFLICT", message: "New time overlaps with a blocked break." });
       }
 
@@ -356,21 +372,30 @@ export const sessionRouter = router({
         .select("*, clients(full_name, email, phone)")
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to reschedule session" });
       return data;
     }),
 
-  /** Delete a session permanently */
+  /** Soft-delete a session (sets deleted_at, RLS hides from future reads) */
   delete: protectedProcedure
     .input(z.object({ session_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { error } = await ctx.supabase
         .from("sessions")
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq("id", input.session_id)
         .eq("therapist_id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete session" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "delete",
+        entity_type: "session",
+        entity_id: input.session_id,
+      });
+
       return { success: true };
     }),
 
@@ -389,7 +414,7 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to mark session as no-show" });
       return data;
     }),
 
@@ -404,20 +429,50 @@ export const sessionRouter = router({
         .eq("client_id", input.client_id)
         .order("starts_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch client sessions" });
       return data;
     }),
 
-  /** Cancel a session */
+  /** Cancel a session (with late cancellation detection) */
   cancel: protectedProcedure
-    .input(cancelSessionSchema)
+    .input(cancelSessionSchema.extend({
+      cancelled_by: z.enum(["therapist", "client"]).default("therapist"),
+    }))
     .mutation(async ({ ctx, input }) => {
+      // Fetch session and therapist cancellation policy in parallel
+      const [sessionRes, therapistRes] = await Promise.all([
+        ctx.supabase
+          .from("sessions")
+          .select("starts_at, status")
+          .eq("id", input.session_id)
+          .eq("therapist_id", ctx.user.id)
+          .single(),
+        ctx.supabase
+          .from("therapists")
+          .select("cancellation_hours, late_cancel_charge_percent")
+          .eq("id", ctx.user.id)
+          .single(),
+      ]);
+
+      const session = sessionRes.data;
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found." });
+
+      const therapist = therapistRes.data;
+
+      const cancellationHours = therapist?.cancellation_hours ?? 24;
+      const sessionStart = new Date(session.starts_at).getTime();
+      const hoursUntil = (sessionStart - Date.now()) / (1000 * 60 * 60);
+      const isLate = input.cancelled_by === "client" && hoursUntil <= cancellationHours;
+
       const { data, error } = await ctx.supabase
         .from("sessions")
         .update({
           status: "cancelled",
           cancellation_reason: input.reason ?? null,
           cancelled_at: new Date().toISOString(),
+          cancelled_by: input.cancelled_by,
+          is_late_cancellation: isLate,
+          payment_status: isLate ? "pending" : undefined,
           updated_at: new Date().toISOString(),
         })
         .eq("id", input.session_id)
@@ -425,10 +480,19 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to cancel session" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "update",
+        entity_type: "session",
+        entity_id: input.session_id,
+        changes: { status: "cancelled", reason: input.reason ?? null },
+      });
 
       // TODO: Cancel Zoom meeting, delete Google Calendar event, notify client
-      return data;
+      return { ...data, is_late_cancellation: isLate };
     }),
 
   /** Mark session as completed */
@@ -446,7 +510,17 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to complete session" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "update",
+        entity_type: "session",
+        entity_id: input.session_id,
+        changes: { status: "completed" },
+      });
+
       return data;
     }),
 
@@ -454,7 +528,7 @@ export const sessionRouter = router({
   createNote: protectedProcedure
     .input(createSessionNoteSchema)
     .mutation(async ({ ctx, input }) => {
-      const encrypted = encryptNoteInput({ ...input });
+      const encrypted = clinicalData.encryptNote({ ...input });
       const { data, error } = await ctx.supabase
         .from("session_notes")
         .insert({
@@ -464,8 +538,17 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
-      return decryptNote(data);
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create session note" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "create",
+        entity_type: "session_note",
+        entity_id: data.id,
+      });
+
+      return clinicalData.decryptNote(data);
     }),
 
   /** Update session note (clinical fields encrypted at rest) */
@@ -477,7 +560,7 @@ export const sessionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const encrypted = encryptNoteInput({ ...input.data });
+      const encrypted = clinicalData.encryptNote({ ...input.data });
       const { data, error } = await ctx.supabase
         .from("session_notes")
         .update({ ...encrypted, updated_at: new Date().toISOString() })
@@ -486,76 +569,116 @@ export const sessionRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
-      return decryptNote(data);
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update session note" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "update",
+        entity_type: "session_note",
+        entity_id: input.note_id,
+      });
+
+      return clinicalData.decryptNote(data);
     }),
 
-  /** Get note for a session */
-  getNote: protectedProcedure
+  /** Get note for a session (requires clinical notes access) */
+  getNote: clinicalProcedure
     .input(z.object({ session_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const therapistIds = await getAccessibleTherapistIds(
+        ctx.supabase,
+        ctx.user.id,
+        ctx.practice
+      );
+
+      let query = ctx.supabase
         .from("session_notes")
         .select("*")
-        .eq("session_id", input.session_id)
-        .eq("therapist_id", ctx.user.id)
-        .single();
+        .eq("session_id", input.session_id);
 
-      if (error && error.code !== "PGRST116") throw error; // PGRST116 = not found
-      return data ? decryptNote(data) : null;
+      query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
+
+      const { data, error } = await query.single();
+
+      if (error && error.code !== "PGRST116") throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch session note" }); // PGRST116 = not found
+      return data ? clinicalData.decryptNote(data) : null;
     }),
 
-  /** Get note by ID */
-  getNoteById: protectedProcedure
+  /** Get note by ID (requires clinical notes access) */
+  getNoteById: clinicalProcedure
     .input(z.object({ note_id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
+      const therapistIds = await getAccessibleTherapistIds(
+        ctx.supabase,
+        ctx.user.id,
+        ctx.practice
+      );
+
+      let query = ctx.supabase
         .from("session_notes")
         .select("*, sessions(starts_at, ends_at, client_id, clients(full_name))")
-        .eq("id", input.note_id)
-        .eq("therapist_id", ctx.user.id)
-        .single();
+        .eq("id", input.note_id);
 
-      if (error) throw error;
-      return decryptNote(data);
+      query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
+
+      const { data, error } = await query.single();
+
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch session note" });
+      return clinicalData.decryptNote(data);
     }),
 
-  /** List recent notes */
-  listNotes: protectedProcedure
+  /** List recent notes (requires clinical notes access) */
+  listNotes: clinicalProcedure
     .input(
-      z.object({
-        limit: z.number().min(1).max(100).default(20),
+      paginationSchema.extend({
         client_id: z.string().uuid().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
+      const therapistIds = await getAccessibleTherapistIds(
+        ctx.supabase,
+        ctx.user.id,
+        ctx.practice
+      );
+
       let query = ctx.supabase
         .from("session_notes")
         .select("*, sessions!inner(starts_at, ends_at, client_id, clients(full_name))")
-        .eq("therapist_id", ctx.user.id)
         .order("created_at", { ascending: false })
         .limit(input.limit);
+
+      query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
 
       if (input.client_id) {
         query = query.eq("sessions.client_id", input.client_id);
       }
 
       const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []).map((note) => decryptNote(note));
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch session notes" });
+      return (data ?? []).map((note) => clinicalData.decryptNote(note));
     }),
 
-  /** Delete a note */
+  /** Soft-delete a note (sets deleted_at, RLS hides from future reads) */
   deleteNote: protectedProcedure
     .input(z.object({ note_id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { error } = await ctx.supabase
         .from("session_notes")
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq("id", input.note_id)
         .eq("therapist_id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete session note" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "delete",
+        entity_type: "session_note",
+        entity_id: input.note_id,
+      });
+
       return { success: true };
     }),
 });

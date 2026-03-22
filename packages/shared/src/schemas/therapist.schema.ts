@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 // Session type configuration (stored as JSONB array on therapists table)
 export const sessionTypeSchema = z.object({
   id: z.string().uuid(),
@@ -9,6 +11,7 @@ export const sessionTypeSchema = z.object({
   description: z.string().max(500).nullable(),
   is_active: z.boolean().default(true),
   sort_order: z.number().int().min(0).default(0),
+  intake_form_id: z.string().uuid().nullable().optional(),
 });
 
 export type SessionType = z.infer<typeof sessionTypeSchema>;
@@ -21,13 +24,13 @@ export type UpdateSessionTypesInput = z.infer<typeof updateSessionTypesSchema>;
 
 export const customTagsSchema = z.object({
   modalities: z.array(z.object({
-    key: z.string(),
-    name: z.string(),
-    fullName: z.string(),
-  })).optional(),
-  techniques: z.array(z.string()).optional(),
-  categories: z.array(z.string()).optional(),
-  risk_flags: z.array(z.string()).optional(),
+    key: z.string().max(100),
+    name: z.string().max(100),
+    fullName: z.string().max(200),
+  })).max(50).optional(),
+  techniques: z.array(z.string().max(100)).max(50).optional(),
+  categories: z.array(z.string().max(100)).max(50).optional(),
+  risk_flags: z.array(z.string().max(100)).max(50).optional(),
 }).nullable();
 
 export type CustomTags = z.infer<typeof customTagsSchema>;
@@ -49,6 +52,10 @@ export const therapistSchema = z.object({
   cancellation_policy: z.string().max(1000).nullable(),
   late_policy: z.string().max(1000).nullable(),
   rescheduling_policy: z.string().max(1000).nullable(),
+  cancellation_hours: z.number().int().min(0).max(168).default(24),
+  min_booking_advance_hours: z.number().int().min(0).max(168).default(24),
+  no_show_charge_percent: z.number().int().min(0).max(100).default(100),
+  late_cancel_charge_percent: z.number().int().min(0).max(100).default(100),
   session_types: z.array(sessionTypeSchema).default([]),
   custom_tags: customTagsSchema.default(null),
   gstin: z.string().max(15).nullable(),
@@ -73,6 +80,10 @@ export const createTherapistSchema = therapistSchema.pick({
   cancellation_policy: true,
   late_policy: true,
   rescheduling_policy: true,
+  cancellation_hours: true,
+  min_booking_advance_hours: true,
+  no_show_charge_percent: true,
+  late_cancel_charge_percent: true,
   session_types: true,
   custom_tags: true,
   gstin: true,
@@ -89,17 +100,20 @@ export const availabilitySchema = z.object({
   id: z.string().uuid(),
   therapist_id: z.string().uuid(),
   day_of_week: z.number().int().min(0).max(6), // 0=Sun, 6=Sat
-  start_time: z.string(), // HH:mm
-  end_time: z.string(),
+  start_time: z.string().regex(TIME_REGEX, "Must be HH:mm (00:00-23:59)"),
+  end_time: z.string().regex(TIME_REGEX, "Must be HH:mm (00:00-23:59)"),
   is_active: z.boolean().default(true),
 });
 
 export const setAvailabilitySchema = z.object({
   day_of_week: z.number().int().min(0).max(6),
-  start_time: z.string().regex(/^\d{2}:\d{2}$/),
-  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+  start_time: z.string().regex(TIME_REGEX, "Must be HH:mm (00:00-23:59)"),
+  end_time: z.string().regex(TIME_REGEX, "Must be HH:mm (00:00-23:59)"),
   is_active: z.boolean().default(true),
-});
+}).refine(
+  (d) => d.start_time < d.end_time,
+  { message: "start_time must be before end_time", path: ["end_time"] }
+);
 
 export type Availability = z.infer<typeof availabilitySchema>;
 export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;

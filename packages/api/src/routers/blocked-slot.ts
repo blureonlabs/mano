@@ -20,7 +20,7 @@ export const blockedSlotRouter = router({
         .lte("start_at", input.to)
         .order("start_at");
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch blocked slots" });
       return data;
     }),
 
@@ -66,7 +66,7 @@ export const blockedSlotRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create blocked slot" });
       return data;
     }),
 
@@ -114,7 +114,7 @@ export const blockedSlotRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update blocked slot" });
       return data;
     }),
 
@@ -128,7 +128,7 @@ export const blockedSlotRouter = router({
         .eq("id", input.id)
         .eq("therapist_id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete blocked slot" });
       return { success: true };
     }),
 });

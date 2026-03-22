@@ -76,12 +76,15 @@ export default function CreateSessionModal({ onClose, onCreated }: CreateSession
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add session"
         className="bg-white rounded-2xl border border-cream-300 shadow-xl p-6 w-full max-w-md space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <h3 className="text-base font-heading font-semibold text-ink">Add Session</h3>
-          <button onClick={onClose} className="p-1 text-ink-lighter hover:text-ink transition-colors">
+          <button onClick={onClose} aria-label="Close" className="p-1 text-ink-lighter hover:text-ink transition-colors">
             <X size={18} />
           </button>
         </div>

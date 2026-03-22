@@ -1,4 +1,5 @@
 import { router, protectedProcedure } from "../trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 export const integrationRouter = router({
@@ -10,7 +11,7 @@ export const integrationRouter = router({
       .eq("id", ctx.user.id)
       .single();
 
-    if (error) throw error;
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch integration status" });
     return {
       zoom: data?.zoom_connected ?? false,
       google_calendar: data?.google_connected ?? false,
@@ -41,7 +42,7 @@ export const integrationRouter = router({
         })
         .eq("id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to connect Zoom" });
       return { success: true };
     }),
 
@@ -56,7 +57,7 @@ export const integrationRouter = router({
       })
       .eq("id", ctx.user.id);
 
-    if (error) throw error;
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to disconnect Zoom" });
     return { success: true };
   }),
 
@@ -83,7 +84,7 @@ export const integrationRouter = router({
         })
         .eq("id", ctx.user.id);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to connect Google Calendar" });
       return { success: true };
     }),
 
@@ -98,7 +99,7 @@ export const integrationRouter = router({
       })
       .eq("id", ctx.user.id);
 
-    if (error) throw error;
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to disconnect Google Calendar" });
     return { success: true };
   }),
 });

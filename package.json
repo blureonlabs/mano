@@ -8,14 +8,20 @@
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
     "db:generate": "turbo db:generate",
-    "db:reset": "cd supabase && supabase db reset"
+    "db:reset": "cd supabase && supabase db reset",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "turbo": "^2.5.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.0"
   },
   "packageManager": "pnpm@10.32.1",
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@sentry/cli"]
   }
 }

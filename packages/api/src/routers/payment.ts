@@ -1,28 +1,38 @@
-import { router, protectedProcedure } from "../trpc";
-import { createInvoiceSchema } from "@mano/shared";
+import { router, protectedProcedure, practiceProcedure } from "../trpc";
+import { createInvoiceSchema, paginationSchema } from "@mano/shared";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { getAccessibleTherapistIds, applyTherapistScope } from "../utils/practice-scope";
 
 export const paymentRouter = router({
-  /** List invoices for the current therapist */
-  list: protectedProcedure
+  /** List invoices for the current therapist / practice */
+  list: practiceProcedure
     .input(
-      z.object({
+      paginationSchema.extend({
         client_id: z.string().uuid().optional(),
         status: z.enum(["unpaid", "paid", "refunded"]).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
+      const therapistIds = await getAccessibleTherapistIds(
+        ctx.supabase,
+        ctx.user.id,
+        ctx.practice
+      );
+
       let query = ctx.supabase
         .from("invoices")
         .select("*, clients(full_name, email)")
-        .eq("therapist_id", ctx.user.id)
         .order("created_at", { ascending: false });
+
+      query = applyTherapistScope(query, ctx.user.id, ctx.practice, therapistIds);
 
       if (input.client_id) query = query.eq("client_id", input.client_id);
       if (input.status) query = query.eq("status", input.status);
+      query = query.limit(input.limit);
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch invoices" });
       return data;
     }),
 
@@ -60,7 +70,7 @@ export const paymentRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create invoice" });
       return data;
     }),
 
@@ -85,7 +95,7 @@ export const paymentRouter = router({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update invoice payment status" });
       return data;
     }),
 
@@ -100,8 +110,8 @@ export const paymentRouter = router({
         .eq("therapist_id", ctx.user.id)
         .single();
 
-      if (error) throw error;
-      if (!invoice) throw new Error("Invoice not found");
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch invoice" });
+      if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" });
 
       // TODO: Call @mano/integrations RazorpayClient.createOrder()
       // For now, return a placeholder

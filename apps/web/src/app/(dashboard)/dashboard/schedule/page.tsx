@@ -3,17 +3,18 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { getMonday, startOfDayIST, endOfDayIST, endOfWeekIST } from "@/lib/date-utils";
+import { getMonday, startOfDayIST, endOfDayIST, endOfWeekIST, getMonthGrid } from "@/lib/date-utils";
 import ScheduleHeader from "@/components/schedule/ScheduleHeader";
 import WeekView from "@/components/schedule/WeekView";
 import DayView from "@/components/schedule/DayView";
+import MonthView from "@/components/schedule/MonthView";
 import ListView from "@/components/schedule/ListView";
 import SessionDetailPopover from "@/components/schedule/SessionDetailPopover";
 import AddBreakModal from "@/components/schedule/AddBreakModal";
 import CreateSessionModal from "@/components/schedule/CreateSessionModal";
 
 type ViewMode = "calendar" | "list";
-type CalendarView = "week" | "day";
+type CalendarView = "week" | "day" | "month";
 
 interface BreakModalData {
   start: string;
@@ -25,7 +26,9 @@ export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [calendarView, setCalendarView] = useState<CalendarView>("week");
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
+  const [monthDate, setMonthDate] = useState<Date>(() => new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [previousCalendarView, setPreviousCalendarView] = useState<"week" | "month">("week");
 
   // Modal states
   const [breakModal, setBreakModal] = useState<BreakModalData | null>(null);
@@ -37,8 +40,12 @@ export default function SchedulePage() {
     if (calendarView === "day" && selectedDay) {
       return { from: startOfDayIST(selectedDay), to: endOfDayIST(selectedDay) };
     }
+    if (calendarView === "month") {
+      const grid = getMonthGrid(monthDate);
+      return { from: startOfDayIST(grid[0]!), to: endOfDayIST(grid[41]!) };
+    }
     return { from: startOfDayIST(weekStart), to: endOfWeekIST(weekStart) };
-  }, [calendarView, weekStart, selectedDay]);
+  }, [calendarView, weekStart, selectedDay, monthDate]);
 
   // Data queries
   const sessions = trpc.session.listByDateRange.useQuery({ from, to });
@@ -55,26 +62,108 @@ export default function SchedulePage() {
     utils.blockedSlot.list.invalidate();
   }
 
+  // Helper to optimistically update a session's status in the cache
+  function optimisticStatusUpdate(sessionId: string, newStatus: string) {
+    const queryParams = { from, to };
+    const previousSessions = utils.session.listByDateRange.getData(queryParams);
+    const previousPending = utils.session.pending.getData();
+
+    utils.session.listByDateRange.setData(queryParams, (old) => {
+      if (!old) return old;
+      return old.map((s) =>
+        s.id === sessionId ? { ...s, status: newStatus } : s
+      );
+    });
+
+    // Remove from pending list for approve/reject actions
+    if (newStatus === "scheduled" || newStatus === "rejected" || newStatus === "cancelled") {
+      utils.session.pending.setData(undefined, (old) => {
+        if (!old) return old;
+        return old.filter((s) => s.id !== sessionId);
+      });
+    }
+
+    return { previousSessions, previousPending, queryParams };
+  }
+
+  function rollbackOptimistic(context: { previousSessions?: unknown; previousPending?: unknown; queryParams: unknown } | undefined) {
+    if (context?.previousSessions !== undefined) {
+      utils.session.listByDateRange.setData(context.queryParams as any, context.previousSessions as any);
+    }
+    if (context?.previousPending !== undefined) {
+      utils.session.pending.setData(undefined, context.previousPending as any);
+    }
+  }
+
   // Session mutations
   const approve = trpc.session.approve.useMutation({
-    onSuccess: () => { invalidateAll(); toast.success("Session approved"); },
-    onError: (err) => toast.error(err.message),
+    onMutate: async ({ session_id }) => {
+      await Promise.all([
+        utils.session.listByDateRange.cancel(),
+        utils.session.pending.cancel(),
+      ]);
+      return optimisticStatusUpdate(session_id, "scheduled");
+    },
+    onSuccess: () => toast.success("Session approved"),
+    onError: (err, _vars, context) => {
+      rollbackOptimistic(context);
+      toast.error(err.message);
+    },
+    onSettled: () => invalidateAll(),
   });
   const reject = trpc.session.reject.useMutation({
-    onSuccess: () => { invalidateAll(); toast.success("Booking declined"); },
-    onError: (err) => toast.error(err.message),
+    onMutate: async ({ session_id }) => {
+      await Promise.all([
+        utils.session.listByDateRange.cancel(),
+        utils.session.pending.cancel(),
+      ]);
+      return optimisticStatusUpdate(session_id, "rejected");
+    },
+    onSuccess: () => toast.success("Booking declined"),
+    onError: (err, _vars, context) => {
+      rollbackOptimistic(context);
+      toast.error(err.message);
+    },
+    onSettled: () => invalidateAll(),
   });
   const complete = trpc.session.complete.useMutation({
-    onSuccess: () => { invalidateAll(); toast.success("Session marked as completed"); },
-    onError: (err) => toast.error(err.message),
+    onMutate: async ({ session_id }) => {
+      await utils.session.listByDateRange.cancel();
+      return optimisticStatusUpdate(session_id, "completed");
+    },
+    onSuccess: () => toast.success("Session marked as completed"),
+    onError: (err, _vars, context) => {
+      rollbackOptimistic(context);
+      toast.error(err.message);
+    },
+    onSettled: () => invalidateAll(),
   });
   const cancel = trpc.session.cancel.useMutation({
-    onSuccess: () => { invalidateAll(); toast.success("Session cancelled"); },
-    onError: (err) => toast.error(err.message),
+    onMutate: async ({ session_id }) => {
+      await Promise.all([
+        utils.session.listByDateRange.cancel(),
+        utils.session.pending.cancel(),
+      ]);
+      return optimisticStatusUpdate(session_id, "cancelled");
+    },
+    onSuccess: () => toast.success("Session cancelled"),
+    onError: (err, _vars, context) => {
+      rollbackOptimistic(context);
+      toast.error(err.message);
+    },
+    onSettled: () => invalidateAll(),
   });
   const markNoShow = trpc.session.markNoShow.useMutation({
-    onSuccess: () => { invalidateAll(); toast.success("Session marked as no-show"); },
-    onError: (err) => toast.error(err.message),
+    onMutate: async ({ session_id }) => {
+      await utils.session.listByDateRange.cancel();
+      return optimisticStatusUpdate(session_id, "no_show");
+    },
+    onSuccess: () => toast.success("Session marked as no-show"),
+    onError: (err, _vars, context) => {
+      rollbackOptimistic(context);
+      toast.error(err.message);
+    },
+    onSettled: () => invalidateAll(),
   });
   const reschedule = trpc.session.reschedule.useMutation({
     onSuccess: () => {
@@ -85,12 +174,27 @@ export default function SchedulePage() {
     onError: (err) => toast.error(err.message),
   });
   const deleteSession = trpc.session.delete.useMutation({
+    onMutate: async ({ session_id }) => {
+      await utils.session.listByDateRange.cancel();
+      const queryParams = { from, to };
+      const previousSessions = utils.session.listByDateRange.getData(queryParams);
+      utils.session.listByDateRange.setData(queryParams, (old) => {
+        if (!old) return old;
+        return old.filter((s) => s.id !== session_id);
+      });
+      return { previousSessions, queryParams };
+    },
     onSuccess: () => {
-      invalidateAll();
       setSelectedSessionId(null);
       toast.success("Session deleted");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err, _vars, context) => {
+      if (context?.previousSessions !== undefined) {
+        utils.session.listByDateRange.setData(context.queryParams, context.previousSessions as any);
+      }
+      toast.error(err.message);
+    },
+    onSettled: () => invalidateAll(),
   });
 
   // Blocked slot mutations
@@ -138,19 +242,41 @@ export default function SchedulePage() {
     setWeekStart(next);
   }
 
+  function goToPrevMonth() {
+    const prev = new Date(monthDate);
+    prev.setMonth(prev.getMonth() - 1);
+    setMonthDate(prev);
+  }
+
+  function goToNextMonth() {
+    const next = new Date(monthDate);
+    next.setMonth(next.getMonth() + 1);
+    setMonthDate(next);
+  }
+
   function goToToday() {
     setWeekStart(getMonday(new Date()));
-    setCalendarView("week");
+    setMonthDate(new Date());
+    if (calendarView === "day") {
+      setCalendarView(previousCalendarView);
+    }
+    setSelectedDay(null);
+  }
+
+  function handleCalendarViewChange(view: "week" | "month") {
+    setPreviousCalendarView(view);
+    setCalendarView(view);
     setSelectedDay(null);
   }
 
   function onDayClick(day: Date) {
+    setPreviousCalendarView(calendarView === "day" ? previousCalendarView : calendarView as "week" | "month");
     setSelectedDay(day);
     setCalendarView("day");
   }
 
-  function backToWeek() {
-    setCalendarView("week");
+  function backToParent() {
+    setCalendarView(previousCalendarView);
     setSelectedDay(null);
   }
 
@@ -187,12 +313,16 @@ export default function SchedulePage() {
         viewMode={viewMode}
         calendarView={calendarView}
         weekStart={weekStart}
+        monthDate={monthDate}
         selectedDay={selectedDay}
         onViewModeChange={setViewMode}
+        onCalendarViewChange={handleCalendarViewChange}
         onPrevWeek={goToPrevWeek}
         onNextWeek={goToNextWeek}
+        onPrevMonth={goToPrevMonth}
+        onNextMonth={goToNextMonth}
         onToday={goToToday}
-        onBackToWeek={backToWeek}
+        onBackToParent={backToParent}
         onAddSession={() => setCreateSessionOpen(true)}
         pendingCount={pendingCount}
       />
@@ -230,6 +360,14 @@ export default function SchedulePage() {
             }
           }}
           isActing={isActing}
+        />
+      ) : calendarView === "month" ? (
+        <MonthView
+          monthDate={monthDate}
+          sessions={allSessions as any}
+          blockedSlots={(blockedSlots.data ?? []) as any}
+          isLoading={sessions.isLoading}
+          onDayClick={onDayClick}
         />
       ) : calendarView === "week" ? (
         <WeekView

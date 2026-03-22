@@ -8,6 +8,7 @@ import IntegrationCards from "@/components/settings/IntegrationCards";
 import BookingPageSection from "@/components/settings/BookingPageSection";
 import PoliciesForm from "@/components/settings/PoliciesForm";
 import TagManager from "@/components/settings/TagManager";
+import IntakeFormEditor from "@/components/settings/IntakeFormEditor";
 
 export default function SettingsPage() {
   const therapist = trpc.therapist.me.useQuery();
@@ -70,6 +71,8 @@ export default function SettingsPage() {
         bufferMins={t.buffer_mins}
       />
 
+      <IntakeFormEditor sessionTypes={t.session_types ?? []} />
+
       <AvailabilityEditor availability={availability.data ?? []} />
 
       <BookingPageSection
@@ -84,6 +87,10 @@ export default function SettingsPage() {
           cancellation_policy: t.cancellation_policy,
           late_policy: t.late_policy,
           rescheduling_policy: t.rescheduling_policy,
+          cancellation_hours: t.cancellation_hours ?? 24,
+          min_booking_advance_hours: t.min_booking_advance_hours ?? 24,
+          no_show_charge_percent: t.no_show_charge_percent ?? 100,
+          late_cancel_charge_percent: t.late_cancel_charge_percent ?? 100,
         }}
       />
 

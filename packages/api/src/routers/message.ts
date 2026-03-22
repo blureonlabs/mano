@@ -1,27 +1,16 @@
 import { router, protectedProcedure } from "../trpc";
-import { sendMessageSchema } from "@mano/shared";
+import { sendMessageSchema, paginationSchema } from "@mano/shared";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { encrypt, decrypt } from "../utils/encryption";
-
-function decryptMessage<T extends Record<string, unknown>>(msg: T): T {
-  const result = { ...msg };
-  if (result.content != null && typeof result.content === "string") {
-    try {
-      const decrypted = decrypt(result.content as string);
-      if (decrypted != null) (result as Record<string, unknown>).content = decrypted;
-    } catch { /* leave as-is if not encrypted (legacy data) */ }
-  }
-  return result;
-}
+import { logAudit } from "../utils/audit";
+import { clinicalData } from "../utils/clinical";
 
 export const messageRouter = router({
   /** Get messages for a client (paginated, content decrypted) */
   list: protectedProcedure
     .input(
-      z.object({
+      paginationSchema.extend({
         client_id: z.string().uuid(),
-        limit: z.number().min(1).max(100).default(50),
-        cursor: z.string().datetime().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -38,11 +27,11 @@ export const messageRouter = router({
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch messages" });
 
       const hasMore = data && data.length > input.limit;
       const raw = hasMore ? data.slice(0, -1) : (data ?? []);
-      const messages = raw.map((msg) => decryptMessage(msg));
+      const messages = raw.map((msg) => clinicalData.decryptMessage(msg));
 
       return {
         messages,
@@ -54,22 +43,31 @@ export const messageRouter = router({
   send: protectedProcedure
     .input(sendMessageSchema)
     .mutation(async ({ ctx, input }) => {
+      const encrypted = clinicalData.encryptMessage({ content: input.content });
       const { data, error } = await ctx.supabase
         .from("messages")
         .insert({
           therapist_id: ctx.user.id,
           client_id: input.client_id,
           sender_type: "therapist",
-          content: encrypt(input.content),
+          ...encrypted,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to send message" });
+
+      logAudit(ctx.supabase, {
+        therapist_id: ctx.user.id,
+        actor_id: ctx.user.id,
+        action: "create",
+        entity_type: "message",
+        entity_id: (data as Record<string, unknown>).id as string,
+      });
 
       // TODO: Send via WhatsApp/Email using @mano/integrations
 
-      return decryptMessage(data as Record<string, unknown>);
+      return clinicalData.decryptMessage(data as Record<string, unknown>);
     }),
 
   /** Mark messages as read */
@@ -84,7 +82,7 @@ export const messageRouter = router({
         .eq("sender_type", "client")
         .is("read_at", null);
 
-      if (error) throw error;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to mark messages as read" });
       return { success: true };
     }),
 
@@ -97,7 +95,7 @@ export const messageRouter = router({
       .eq("sender_type", "client")
       .is("read_at", null);
 
-    if (error) throw error;
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch unread message counts" });
 
     const counts: Record<string, number> = {};
     for (const msg of data ?? []) {

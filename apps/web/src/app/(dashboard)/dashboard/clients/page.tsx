@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { CLIENT_STATUSES, CLIENT_CATEGORIES } from "@mano/shared";
 import {
   Users,
   Search,
@@ -11,16 +12,28 @@ import {
   Mail,
   Phone,
   Trash2,
+  Filter,
 } from "lucide-react";
 
+type StatusFilter = "active" | "inactive" | "terminated" | "all";
+
 export default function ClientsPage() {
-  const clients = trpc.clients.list.useQuery();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
+  const clients = trpc.clients.list.useQuery(
+    statusFilter === "all"
+      ? { includeAll: true }
+      : statusFilter === "active"
+      ? undefined
+      : { status: statusFilter as "active" | "inactive" | "terminated" }
+  );
   const utils = trpc.useUtils();
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [newCategory, setNewCategory] = useState<string>("indian");
+  const [newClientType, setNewClientType] = useState<string>("irregular");
   const [search, setSearch] = useState("");
 
   const create = trpc.clients.create.useMutation({
@@ -30,11 +43,34 @@ export default function ClientsPage() {
       setName("");
       setEmail("");
       setPhone("");
+      setNewCategory("indian");
+      setNewClientType("irregular");
     },
   });
 
+  const currentQueryInput =
+    statusFilter === "all"
+      ? { includeAll: true }
+      : statusFilter === "active"
+      ? undefined
+      : { status: statusFilter as "active" | "inactive" | "terminated" };
+
   const deactivate = trpc.clients.deactivate.useMutation({
-    onSuccess: () => utils.clients.list.invalidate(),
+    onMutate: async ({ id }) => {
+      await utils.clients.list.cancel();
+      const previousData = utils.clients.list.getData(currentQueryInput as any);
+      utils.clients.list.setData(currentQueryInput as any, (old) => {
+        if (!old) return old;
+        return old.filter((c) => c.id !== id);
+      });
+      return { previousData };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousData) {
+        utils.clients.list.setData(currentQueryInput as any, context.previousData);
+      }
+    },
+    onSettled: () => utils.clients.list.invalidate(),
   });
 
   function handleCreate(e: React.FormEvent) {
@@ -43,6 +79,8 @@ export default function ClientsPage() {
       full_name: name,
       email: email || null,
       phone: phone || null,
+      category: newCategory as "indian" | "nri" | "couple" | "other",
+      client_type: newClientType as "regular" | "irregular",
     });
   }
 
@@ -64,6 +102,19 @@ export default function ClientsPage() {
     );
   }
 
+  const statusColors: Record<string, string> = {
+    active: "bg-sage-50 text-sage",
+    inactive: "bg-cream-200 text-ink-lighter",
+    terminated: "bg-red-50 text-red-600",
+  };
+
+  const categoryColors: Record<string, string> = {
+    indian: "bg-sage-50 text-sage",
+    nri: "bg-blue-50 text-blue-600",
+    couple: "bg-amber-50 text-amber",
+    other: "bg-cream-200 text-ink-lighter",
+  };
+
   return (
     <div className="max-w-3xl space-y-6">
       {/* Header */}
@@ -74,7 +125,7 @@ export default function ClientsPage() {
             <h1 className="text-2xl font-heading font-bold text-ink">Clients</h1>
           </div>
           <p className="text-sm text-ink-lighter mt-0.5">
-            {clients.data?.length ?? 0} active client{(clients.data?.length ?? 0) !== 1 ? "s" : ""}
+            {clients.data?.length ?? 0} client{(clients.data?.length ?? 0) !== 1 ? "s" : ""}
           </p>
         </div>
         <button
@@ -93,6 +144,24 @@ export default function ClientsPage() {
             </>
           )}
         </button>
+      </div>
+
+      {/* Status filter pills */}
+      <div className="flex items-center gap-2">
+        <Filter size={14} className="text-ink-lighter" />
+        {(["active", "inactive", "terminated", "all"] as const).map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              statusFilter === status
+                ? "bg-sage text-white"
+                : "bg-cream-100 text-ink-lighter hover:bg-cream-200"
+            }`}
+          >
+            {status === "all" ? "All" : CLIENT_STATUSES[status]?.label ?? status}
+          </button>
+        ))}
       </div>
 
       {/* Add client form */}
@@ -128,6 +197,31 @@ export default function ClientsPage() {
               onChange={(e) => setPhone(e.target.value)}
               className="px-3.5 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm"
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-ink-light mb-1">Category</label>
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm"
+              >
+                {Object.entries(CLIENT_CATEGORIES).map(([key, val]) => (
+                  <option key={key} value={key}>{val.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink-light mb-1">Type</label>
+              <select
+                value={newClientType}
+                onChange={(e) => setNewClientType(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-cream-300 bg-white focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm"
+              >
+                <option value="irregular">Irregular</option>
+                <option value="regular">Regular (fixed slot)</option>
+              </select>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -187,11 +281,29 @@ export default function ClientsPage() {
                     {client.full_name.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-ink">
-                    {client.full_name}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink">
+                      {client.full_name}
+                    </span>
+                    {/* Status badge */}
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-pill text-[10px] font-medium ${statusColors[client.status] ?? statusColors.active}`}>
+                      {CLIENT_STATUSES[client.status as keyof typeof CLIENT_STATUSES]?.label ?? client.status}
+                    </span>
+                    {/* Category badge */}
+                    {client.category && client.category !== "indian" && (
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-pill text-[10px] font-medium ${categoryColors[client.category] ?? categoryColors.other}`}>
+                        {CLIENT_CATEGORIES[client.category as keyof typeof CLIENT_CATEGORIES]?.label ?? client.category}
+                      </span>
+                    )}
+                    {/* Regular client indicator */}
+                    {client.client_type === "regular" && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-pill text-[10px] font-medium bg-blue-50 text-blue-600">
+                        Regular
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-ink-lighter flex items-center gap-2">
+                  <div className="text-xs text-ink-lighter flex items-center gap-2 mt-0.5">
                     {client.email && (
                       <span className="inline-flex items-center gap-1">
                         <Mail size={10} />

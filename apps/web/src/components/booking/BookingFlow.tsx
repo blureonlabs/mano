@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 import TherapistHeader from "./TherapistHeader";
 import SessionTypePicker from "./SessionTypePicker";
 import DatePicker from "./DatePicker";
@@ -9,10 +11,16 @@ import SlotGrid from "./SlotGrid";
 import BookingForm from "./BookingForm";
 import BookingConfirmation from "./BookingConfirmation";
 import PolicyNotice from "./PolicyNotice";
+import StepIndicator from "./StepIndicator";
 
 interface TimeSlot {
   start: string;
   end: string;
+}
+
+interface SessionTypeRate {
+  client_category: string;
+  rate_inr: number;
 }
 
 interface SelectedType {
@@ -21,6 +29,7 @@ interface SelectedType {
   duration_mins: number;
   rate_inr: number;
   description: string | null;
+  session_type_rates?: SessionTypeRate[];
 }
 
 type Step = "type" | "select" | "form" | "confirmed";
@@ -35,8 +44,28 @@ export default function BookingFlow({ slug }: { slug: string }) {
   const [selectedType, setSelectedType] = useState<SelectedType | null>(null);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [step, setStep] = useState<Step>("type");
   const [zoomJoinUrl, setZoomJoinUrl] = useState<string | null>(null);
+  const [intakeAccessToken, setIntakeAccessToken] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
+
+  // Check if user is logged in (client auth)
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setAuthEmail(data.user?.email ?? null);
+      setIsAuthChecked(true);
+    });
+  }, []);
+
+  // Auto-fill from client portal if logged in
+  const clientData = trpc.clientPortal.getForTherapist.useQuery(
+    { therapist_slug: slug },
+    { enabled: !!authEmail, retry: false }
+  );
 
   // Fetch therapist profile
   const therapist = trpc.therapist.getBySlug.useQuery(
@@ -44,7 +73,13 @@ export default function BookingFlow({ slug }: { slug: string }) {
     { retry: false }
   );
 
-  // Fetch slots for the selected date (only when a type is selected)
+  // Fetch session types from the normalized table
+  const sessionTypesQuery = trpc.sessionType.listByTherapist.useQuery(
+    { therapistId: therapist.data?.id ?? "" },
+    { enabled: !!therapist.data?.id }
+  );
+
+  // Fetch slots for the selected date
   const slots = trpc.booking.getSlots.useQuery(
     {
       therapist_slug: slug,
@@ -55,17 +90,30 @@ export default function BookingFlow({ slug }: { slug: string }) {
     { enabled: !!therapist.data && !!selectedType }
   );
 
-  // Book mutation
+  // Book single session
   const book = trpc.booking.book.useMutation({
     onSuccess: (result) => {
       setZoomJoinUrl(result.zoom_join_url);
+      setIntakeAccessToken(result.intake_access_token);
       setStep("confirmed");
     },
   });
 
+  // Book multiple sessions
+  const bookMultiple = trpc.booking.bookMultiple.useMutation({
+    onSuccess: () => {
+      setStep("confirmed");
+    },
+  });
+
+  const isBooking = book.isPending || bookMultiple.isPending;
+  const bookError = book.error || bookMultiple.error;
+
   function handleTypeSelect(type: SelectedType) {
     setSelectedType(type);
     setSelectedSlot(null);
+    setSelectedSlots([]);
+    setMultiSelectMode(false);
     setStep("select");
   }
 
@@ -76,21 +124,48 @@ export default function BookingFlow({ slug }: { slug: string }) {
   }
 
   function handleSlotSelect(slot: TimeSlot) {
-    setSelectedSlot(slot);
-    setStep("form");
+    if (multiSelectMode) {
+      setSelectedSlots((prev) => {
+        const exists = prev.some((s) => s.start === slot.start && s.end === slot.end);
+        if (exists) return prev.filter((s) => !(s.start === slot.start && s.end === slot.end));
+        return [...prev, slot];
+      });
+    } else {
+      setSelectedSlot(slot);
+      setStep("form");
+    }
+  }
+
+  function handleContinueMulti() {
+    if (selectedSlots.length > 0) {
+      setStep("form");
+    }
   }
 
   function handleBook(data: { name: string; email: string; phone: string }) {
-    if (!selectedSlot || !selectedType) return;
-    book.mutate({
-      therapist_slug: slug,
-      session_type_id: selectedType.id,
-      client_name: data.name,
-      client_email: data.email,
-      client_phone: data.phone || undefined,
-      slot_start: selectedSlot.start,
-      slot_end: selectedSlot.end,
-    });
+    if (!selectedType) return;
+
+    if (multiSelectMode && selectedSlots.length > 1) {
+      bookMultiple.mutate({
+        therapist_slug: slug,
+        session_type_id: selectedType.id,
+        client_name: data.name,
+        client_email: data.email,
+        client_phone: data.phone || undefined,
+        slots: selectedSlots.map((s) => ({ start: s.start, end: s.end })),
+      });
+    } else {
+      const slot = multiSelectMode ? selectedSlots[0]! : selectedSlot!;
+      book.mutate({
+        therapist_slug: slug,
+        session_type_id: selectedType.id,
+        client_name: data.name,
+        client_email: data.email,
+        client_phone: data.phone || undefined,
+        slot_start: slot.start,
+        slot_end: slot.end,
+      });
+    }
   }
 
   // Loading state
@@ -98,7 +173,7 @@ export default function BookingFlow({ slug }: { slug: string }) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-cream-300 p-8 space-y-6">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-20 h-20 rounded-full bg-cream-200 animate-pulse" />
+          <div className="w-24 h-24 rounded-full bg-cream-200 animate-pulse" />
           <div className="space-y-2 w-full max-w-[200px]">
             <div className="h-5 bg-cream-200 rounded-lg animate-pulse" />
             <div className="h-3 bg-cream-200 rounded-lg animate-pulse w-3/4 mx-auto" />
@@ -139,21 +214,48 @@ export default function BookingFlow({ slug }: { slug: string }) {
 
   const t = therapist.data;
 
-  // Filter to active session types
-  const activeTypes = (t.session_types ?? []).filter(
-    (st: SelectedType & { is_active: boolean }) => st.is_active
-  );
+  // Use normalized session_types table if available, fall back to JSONB on therapists
+  const activeTypes: SelectedType[] = (() => {
+    const tableTypes = sessionTypesQuery.data;
+    if (tableTypes && tableTypes.length > 0) {
+      return tableTypes.map((st) => ({
+        id: st.id,
+        name: st.name,
+        duration_mins: st.duration_mins,
+        rate_inr: st.rate_inr,
+        description: st.description ?? null,
+        session_type_rates: st.session_type_rates ?? [],
+      }));
+    }
+    // Fallback to JSONB
+    return ((t.session_types ?? []) as (SelectedType & { is_active: boolean })[])
+      .filter((st) => st.is_active);
+  })();
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-cream-300 overflow-hidden">
       <div className="p-6 sm:p-8 space-y-6">
-        <TherapistHeader
-          displayName={t.display_name}
-          fullName={t.full_name}
-          bio={t.bio}
-          qualifications={t.qualifications}
-          avatarUrl={t.avatar_url}
-        />
+        {/* Mobile-only header (hidden on desktop with sidebar) */}
+        <div className="sm:hidden">
+          <TherapistHeader
+            displayName={t.display_name}
+            fullName={t.full_name}
+            bio={t.bio}
+            qualifications={t.qualifications}
+            avatarUrl={t.avatar_url}
+          />
+        </div>
+
+        {/* Desktop compact header */}
+        <div className="hidden sm:block">
+          <TherapistHeader
+            displayName={t.display_name}
+            fullName={t.full_name}
+            bio={t.bio}
+            qualifications={t.qualifications}
+            avatarUrl={t.avatar_url}
+          />
+        </div>
 
         <PolicyNotice
           cancellationPolicy={t.cancellation_policy}
@@ -161,13 +263,42 @@ export default function BookingFlow({ slug }: { slug: string }) {
           reschedulingPolicy={t.rescheduling_policy}
         />
 
+        {/* Auth badge */}
+        {isAuthChecked && (
+          <div className="text-center">
+            {authEmail ? (
+              <span className="inline-flex items-center gap-1.5 text-xs bg-sage-50 text-sage font-medium px-3 py-1.5 rounded-pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Logged in as {authEmail}
+              </span>
+            ) : (
+              <p className="text-xs text-ink-lighter">
+                Have an account?{" "}
+                <Link
+                  href={`/client/login?redirect=${encodeURIComponent(`/booking/${slug}`)}`}
+                  className="text-sage font-medium hover:underline"
+                >
+                  Log in
+                </Link>
+                {" "}to auto-fill your details.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Step indicator */}
+        <StepIndicator currentStep={step} />
+
         {step === "confirmed" ? (
           <BookingConfirmation
             therapistName={t.display_name}
-            slotStart={selectedSlot!.start}
-            slotEnd={selectedSlot!.end}
+            slotStart={multiSelectMode && selectedSlots.length > 0 ? selectedSlots[0]!.start : selectedSlot!.start}
+            slotEnd={multiSelectMode && selectedSlots.length > 0 ? selectedSlots[0]!.end : selectedSlot!.end}
             durationMins={selectedType!.duration_mins}
             zoomJoinUrl={zoomJoinUrl}
+            intakeAccessToken={intakeAccessToken}
           />
         ) : (
           <div className="space-y-6">
@@ -204,6 +335,8 @@ export default function BookingFlow({ slug }: { slug: string }) {
                   onClick={() => {
                     setStep("type");
                     setSelectedSlot(null);
+                    setSelectedSlots([]);
+                    setMultiSelectMode(false);
                   }}
                   className="text-xs text-sage font-medium hover:text-sage-600 transition-colors"
                 >
@@ -221,35 +354,64 @@ export default function BookingFlow({ slug }: { slug: string }) {
             )}
 
             {step === "select" && (
-              <SlotGrid
-                slots={slots.data ?? []}
-                selectedSlot={selectedSlot}
-                onSelect={handleSlotSelect}
-                loading={slots.isLoading}
-              />
+              <>
+                {/* Multi-session toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={multiSelectMode}
+                      onChange={(e) => {
+                        setMultiSelectMode(e.target.checked);
+                        if (!e.target.checked) {
+                          setSelectedSlots([]);
+                        }
+                      }}
+                      className="rounded border-cream-300 text-sage focus:ring-sage/30"
+                    />
+                    <span className="text-xs text-ink-lighter font-medium">
+                      Book multiple slots
+                    </span>
+                  </label>
+                </div>
+
+                <SlotGrid
+                  slots={slots.data ?? []}
+                  selectedSlot={selectedSlot}
+                  selectedSlots={selectedSlots}
+                  onSelect={handleSlotSelect}
+                  multiSelect={multiSelectMode}
+                  onContinueMulti={handleContinueMulti}
+                  loading={slots.isLoading}
+                />
+              </>
             )}
 
             {/* Step 3: Booking form */}
-            {step === "form" && selectedSlot && selectedType && (
+            {step === "form" && selectedType && (
               <BookingForm
-                slotStart={selectedSlot.start}
-                slotEnd={selectedSlot.end}
+                slotStart={multiSelectMode && selectedSlots.length > 0 ? selectedSlots[0]!.start : selectedSlot!.start}
+                slotEnd={multiSelectMode && selectedSlots.length > 0 ? selectedSlots[0]!.end : selectedSlot!.end}
+                slots={multiSelectMode ? selectedSlots : undefined}
                 durationMins={selectedType.duration_mins}
                 rateInr={selectedType.rate_inr}
-                loading={book.isPending}
+                loading={isBooking}
+                defaultName={clientData.data?.full_name ?? ""}
+                defaultEmail={clientData.data?.email ?? authEmail ?? ""}
+                defaultPhone={clientData.data?.phone ?? ""}
                 onSubmit={handleBook}
                 onBack={() => setStep("select")}
               />
             )}
 
-            {book.error && (
+            {bookError && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-start gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 mt-0.5">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                {book.error.message}
+                {bookError.message}
               </div>
             )}
           </div>

@@ -31,7 +31,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
 
       {/* Main content */}
       <div className="flex-1 flex items-start justify-center px-4 pb-12">
-        <div className="w-full max-w-[460px]">
+        <div className="w-full max-w-2xl">
           <BookingFlow slug={slug} />
         </div>
       </div>

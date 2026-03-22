@@ -80,6 +80,9 @@ export default function AddBreakModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEditing ? "Edit break" : "Add break"}
         className="bg-white rounded-2xl border border-cream-300 shadow-xl p-6 w-full max-w-sm space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
@@ -87,7 +90,7 @@ export default function AddBreakModal({
           <h3 className="text-base font-heading font-semibold text-ink">
             {isEditing ? "Edit Break" : "Add Break"}
           </h3>
-          <button onClick={onClose} className="p-1 text-ink-lighter hover:text-ink transition-colors">
+          <button onClick={onClose} aria-label="Close" className="p-1 text-ink-lighter hover:text-ink transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -145,6 +148,7 @@ export default function AddBreakModal({
                 type="button"
                 onClick={handleDelete}
                 disabled={isSaving}
+                aria-label={confirmDelete ? "Confirm delete break" : "Delete break"}
                 className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-50 ${
                   confirmDelete
                     ? "bg-red-600 text-white hover:bg-red-700"
